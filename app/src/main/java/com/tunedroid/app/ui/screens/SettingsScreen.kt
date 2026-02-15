@@ -20,7 +20,9 @@ import com.tunedroid.app.data.repository.DownloadRepository
 import com.tunedroid.app.engine.EngineUpdater
 import com.tunedroid.app.engine.FormatPreset
 import com.tunedroid.app.updater.AppUpdateChecker
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -272,17 +274,23 @@ fun SettingsScreen(onNavigateBack: () -> Unit) {
                         scope.launch {
                             try {
                                 // Check app update
-                                AppUpdateChecker.check(context)
-                                // Update engine
-                                val result = EngineUpdater.update(context)
-                                engineVersion = EngineUpdater.getEngineVersion()
-                                when (result) {
-                                    is com.tunedroid.app.engine.UpdateResult.Updated ->
-                                        Toast.makeText(context, "Engine updated to ${result.version}", Toast.LENGTH_SHORT).show()
-                                    is com.tunedroid.app.engine.UpdateResult.AlreadyUpToDate ->
-                                        Toast.makeText(context, "Everything is up to date", Toast.LENGTH_SHORT).show()
-                                    is com.tunedroid.app.engine.UpdateResult.Error ->
-                                        Toast.makeText(context, "Update check failed: ${result.message}", Toast.LENGTH_SHORT).show()
+                                val appUpdate = AppUpdateChecker.check(context)
+                                if (appUpdate != null && appUpdate.isNewer) {
+                                    withContext(Dispatchers.Main) {
+                                        AppUpdateChecker.showUpdateDialog(context, appUpdate)
+                                    }
+                                } else {
+                                    // No app update — check engine update
+                                    val result = EngineUpdater.update(context)
+                                    engineVersion = EngineUpdater.getEngineVersion()
+                                    when (result) {
+                                        is com.tunedroid.app.engine.UpdateResult.Updated ->
+                                            Toast.makeText(context, "Engine updated to ${result.version}", Toast.LENGTH_SHORT).show()
+                                        is com.tunedroid.app.engine.UpdateResult.AlreadyUpToDate ->
+                                            Toast.makeText(context, "Everything is up to date", Toast.LENGTH_SHORT).show()
+                                        is com.tunedroid.app.engine.UpdateResult.Error ->
+                                            Toast.makeText(context, "Update check failed: ${result.message}", Toast.LENGTH_SHORT).show()
+                                    }
                                 }
                             } catch (e: Exception) {
                                 Toast.makeText(context, "Update check failed", Toast.LENGTH_SHORT).show()
