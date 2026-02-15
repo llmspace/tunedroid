@@ -1,6 +1,6 @@
 # TuneDroid
 
-Android audio extraction app with zero platform references.
+Android "audio-from-video-url" extraction app.
 
 ## Features
 - Extract audio from video URLs
