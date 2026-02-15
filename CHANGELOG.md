@@ -2,6 +2,22 @@
 
 All notable changes to TuneDroid will be documented in this file.
 
+## [1.0.4] - 2026-02-15
+
+### Improved
+- **In-app updates**: APK downloads happen in-app via DownloadManager instead of opening the browser
+- **Storage location**: Now display-only — shows the current path without a non-functional picker
+
+### Fixed
+- Auto-update engine toggle showing ON after upgrading from older versions (one-time preference migration)
+- Download recovery after reinstall — files in TuneDroid folder are now correctly rediscovered
+
+### Technical
+- AppUpdateChecker uses DownloadManager + FileProvider for seamless APK install
+- Added REQUEST_INSTALL_PACKAGES permission and external-cache-path to FileProvider config
+- PreferencesManager.runMigrations() resets AUTO_UPDATE_ENGINE for upgrade users
+- Fixed LaunchedEffect cancellation bug in DownloadsScreen recovery logic
+
 ## [1.0.3] - 2026-02-15
 
 ### Improved

@@ -200,14 +200,10 @@ fun SettingsScreen(onNavigateBack: () -> Unit) {
 
             HorizontalDivider()
 
-            // Storage location
-            SettingsItem(
+            // Storage location (display-only)
+            SettingsInfoItem(
                 title = "Storage location",
-                subtitle = storagePath.ifBlank { "Default" },
-                onClick = {
-                    Toast.makeText(context, "Storage picker will be opened", Toast.LENGTH_SHORT).show()
-                },
-                showChevron = true
+                subtitle = storagePath.ifBlank { "Default" }
             )
 
             HorizontalDivider()
@@ -334,6 +330,32 @@ private fun SettingsItem(
                 imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun SettingsInfoItem(
+    title: String,
+    subtitle: String
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }

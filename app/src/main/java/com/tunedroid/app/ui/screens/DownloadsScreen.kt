@@ -47,21 +47,17 @@ fun DownloadsScreen() {
     val failedDownloads = allDownloads.filter { it.status == DownloadStatus.FAILED }
     val completedDownloads = allDownloads.filter { it.status == DownloadStatus.COMPLETED }
 
-    var hasAttemptedRecovery by remember { mutableStateOf(false) }
-
     // Recover existing files after reinstall (DB empty but files exist on disk)
-    LaunchedEffect(allDownloads.isEmpty(), hasAttemptedRecovery) {
-        if (allDownloads.isEmpty() && !hasAttemptedRecovery) {
-            hasAttemptedRecovery = true
-            val recovered = withContext(Dispatchers.IO) {
-                repository.recoverExistingFiles()
-            }
-            if (recovered > 0) {
-                snackbarHostState.showSnackbar(
-                    message = "Recovered $recovered previously downloaded file${if (recovered != 1) "s" else ""}",
-                    duration = SnackbarDuration.Short
-                )
-            }
+    // Uses Unit key to run exactly once — recoverExistingFiles() has its own guard (getTotalCount > 0)
+    LaunchedEffect(Unit) {
+        val recovered = withContext(Dispatchers.IO) {
+            repository.recoverExistingFiles()
+        }
+        if (recovered > 0) {
+            snackbarHostState.showSnackbar(
+                message = "Recovered $recovered previously downloaded file${if (recovered != 1) "s" else ""}",
+                duration = SnackbarDuration.Short
+            )
         }
     }
 

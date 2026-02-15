@@ -50,6 +50,9 @@ class TuneDroidApp : Application() {
     private fun initializeEngine() {
         applicationScope.launch(Dispatchers.IO) {
             try {
+                // Run one-time preference migrations before reading any preferences
+                com.tunedroid.app.data.PreferencesManager.runMigrations(this@TuneDroidApp)
+
                 Log.d(TAG, "Starting engine initialization...")
                 YoutubeDL.getInstance().init(this@TuneDroidApp)
                 Log.d(TAG, "Engine core initialized successfully")
