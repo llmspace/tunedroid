@@ -2,6 +2,27 @@
 
 All notable changes to TuneDroid will be documented in this file.
 
+## [1.0.2] - 2026-02-15
+
+### Improved
+- **Home screen layout**: Fetch button now sits directly under the URL input field for quicker access
+- **Branding image visible during fetch**: Cosmic rabbit stays on screen while metadata is loading
+- **Tip text**: Updated to "Share a video directly to TuneDroid from your browser or other apps" and no longer cut off
+- **Original format label**: Simplified to "Original" (removed redundant "no conversion" text)
+- **Auto-navigate to Downloads**: After starting a download, the app automatically switches to the Downloads screen
+
+### Fixed
+- Downloads getting stuck at "Converting to MP3 100%" and never moving to Completed
+- Original audio files not being cleaned up after MP3 conversion
+- FINALIZING status not tracked in active downloads queries, causing UI gaps
+- Converting status showing misleading percentage (now shows "Converting...")
+
+### Technical
+- Added intermediate file cleanup after successful MP3 conversion
+- Improved post-processing detection with broader log line matching
+- Increased file system flush delay for more reliable file detection
+- DAO queries now include FINALIZING in active download counts
+
 ## [1.0.1] - 2025-02-15
 
 ### Added

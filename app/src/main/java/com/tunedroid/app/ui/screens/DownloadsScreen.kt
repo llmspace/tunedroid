@@ -291,7 +291,7 @@ private fun ActiveDownloadItem(download: DownloadEntity, onAbort: () -> Unit) {
                 val statusText = when (download.status) {
                     DownloadStatus.QUEUED -> "Queued"
                     DownloadStatus.DOWNLOADING -> "Downloading... ${download.progress.toInt()}%"
-                    DownloadStatus.CONVERTING -> "Converting to MP3... ${(download.progress - 70).coerceAtLeast(0f).toInt().let { download.progress.toInt() }}%"
+                    DownloadStatus.CONVERTING -> "Converting..."
                     DownloadStatus.FINALIZING -> "Finalizing..."
                     else -> download.status
                 }

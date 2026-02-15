@@ -9,7 +9,7 @@ enum class FormatPreset(
     MP3_128("MP3 — Standard (128 kbps)", 128, "mp3", true),
     MP3_256("MP3 — High (256 kbps)", 256, "mp3", true),
     MP3_320("MP3 — Maximum (320 kbps)", 320, "mp3", true),
-    ORIGINAL("Original (no conversion)", 0, "", false);
+    ORIGINAL("Original", 0, "", false);
 
     companion object {
         fun availablePresets(sourceBitrateKbps: Int): List<FormatPreset> {

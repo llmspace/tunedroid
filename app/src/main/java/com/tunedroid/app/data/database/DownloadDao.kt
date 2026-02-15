@@ -18,10 +18,10 @@ interface DownloadDao {
     @Query("SELECT * FROM downloads WHERE id = :id")
     suspend fun getById(id: Long): DownloadEntity?
 
-    @Query("SELECT * FROM downloads WHERE status IN ('queued', 'downloading', 'converting') ORDER BY created_at ASC")
+    @Query("SELECT * FROM downloads WHERE status IN ('queued', 'downloading', 'converting', 'finalizing') ORDER BY created_at ASC")
     fun getActiveDownloads(): Flow<List<DownloadEntity>>
 
-    @Query("SELECT * FROM downloads WHERE status IN ('queued', 'downloading', 'converting') ORDER BY created_at ASC")
+    @Query("SELECT * FROM downloads WHERE status IN ('queued', 'downloading', 'converting', 'finalizing') ORDER BY created_at ASC")
     suspend fun getActiveDownloadsList(): List<DownloadEntity>
 
     @Query("SELECT * FROM downloads WHERE status = 'completed' ORDER BY completed_at DESC")
@@ -51,6 +51,6 @@ interface DownloadDao {
     @Query("SELECT * FROM downloads WHERE status = 'queued' ORDER BY created_at ASC LIMIT 1")
     suspend fun getNextQueued(): DownloadEntity?
 
-    @Query("SELECT COUNT(*) FROM downloads WHERE status IN ('downloading', 'converting')")
+    @Query("SELECT COUNT(*) FROM downloads WHERE status IN ('downloading', 'converting', 'finalizing')")
     suspend fun getActiveCount(): Int
 }

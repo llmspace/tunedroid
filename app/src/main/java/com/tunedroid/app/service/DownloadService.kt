@@ -190,6 +190,8 @@ class DownloadService : Service() {
 
             Log.d(TAG, "Starting download for: ${download.title}")
 
+            var isPostProcessing = false
+
             val response = YoutubeDL.getInstance().execute(
                 request, processId
             ) { progress, etaInSeconds, line ->
@@ -198,28 +200,28 @@ class DownloadService : Service() {
                     return@execute
                 }
 
-                val adjustedProgress = progress.coerceIn(0f, 100f)
-
-                // yt-dlp shows download progress, then conversion progress
-                // When converting, progress resets after download completes
-                val statusText = if (line?.contains("[ExtractAudio]") == true ||
+                // Detect post-processing phase (conversion, embedding)
+                if (line?.contains("[ExtractAudio]") == true ||
                     line?.contains("Post-process") == true ||
-                    line?.contains("[EmbedThumbnail]") == true) {
-                    DownloadStatus.CONVERTING
-                } else {
-                    DownloadStatus.DOWNLOADING
+                    line?.contains("[EmbedThumbnail]") == true ||
+                    line?.contains("[Metadata]") == true ||
+                    line?.contains("Deleting original file") == true) {
+                    isPostProcessing = true
                 }
 
-                serviceScope.launch {
-                    repository.updateProgress(download.id, statusText, adjustedProgress)
-                }
-
-                val notifText = if (statusText == DownloadStatus.CONVERTING) {
-                    "Converting to MP3..."
+                if (isPostProcessing) {
+                    // During post-processing, show indeterminate progress
+                    serviceScope.launch {
+                        repository.updateProgress(download.id, DownloadStatus.CONVERTING, 99f)
+                    }
+                    updateNotification("Converting...", download.title, 99)
                 } else {
-                    "Downloading... ${adjustedProgress.toInt()}%"
+                    val adjustedProgress = progress.coerceIn(0f, 100f)
+                    serviceScope.launch {
+                        repository.updateProgress(download.id, DownloadStatus.DOWNLOADING, adjustedProgress)
+                    }
+                    updateNotification("Downloading... ${adjustedProgress.toInt()}%", download.title, adjustedProgress.toInt())
                 }
-                updateNotification(notifText, download.title, adjustedProgress.toInt())
             }
 
             if (isCancelled) {
@@ -236,17 +238,23 @@ class DownloadService : Service() {
             }
 
             // Set FINALIZING status
-            repository.updateStatus(download.id, DownloadStatus.FINALIZING)
+            repository.updateProgress(download.id, DownloadStatus.FINALIZING, 100f)
             updateNotification("Finalizing...", download.title, 100)
 
-            // Give UI time to update and file system time to flush
-            delay(300)
+            // Give file system time to flush
+            delay(500)
 
             // Find the output file
             val outputFile = findOutputFile(storagePath, safeTitle, preset)
 
             if (outputFile != null && outputFile.exists() && outputFile.length() > 0) {
                 Log.d(TAG, "Download complete: ${outputFile.absolutePath} (${outputFile.length()} bytes)")
+
+                // Clean up intermediate/original files left by yt-dlp
+                if (preset.requiresConversion) {
+                    cleanupIntermediateFiles(storagePath, safeTitle, outputFile.name)
+                }
+
                 repository.markCompleted(
                     download.id, outputFile.absolutePath, outputFile.length()
                 )
@@ -348,6 +356,22 @@ class DownloadService : Service() {
             if (file.name.startsWith(baseName) &&
                 (file.name.endsWith(".part") || file.name.endsWith(".temp") || file.name.endsWith(".ytdl"))) {
                 file.delete()
+            }
+        }
+    }
+
+    private fun cleanupIntermediateFiles(dir: String, baseName: String, keepFileName: String) {
+        val directory = File(dir)
+        directory.listFiles()?.forEach { file ->
+            if (file.name == keepFileName) return@forEach
+            // Remove intermediate files that match the base name but aren't the final output
+            if (file.name.startsWith(baseName) && file.isFile) {
+                val ext = file.extension.lowercase()
+                // These are typical intermediate formats left by yt-dlp after conversion
+                if (ext in listOf("webm", "m4a", "opus", "ogg", "wav", "aac", "part", "temp", "ytdl")) {
+                    Log.d(TAG, "Cleaning up intermediate file: ${file.name}")
+                    file.delete()
+                }
             }
         }
     }

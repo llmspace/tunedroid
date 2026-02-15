@@ -169,7 +169,6 @@ fun HomeScreen(
                     urlText = ""
                     homeState = HomeState.Empty
                 },
-                snackbarHostState = snackbarHostState,
                 onNavigateToDownloads = onNavigateToDownloads
             )
         }
@@ -203,7 +202,6 @@ fun HomeScreen(
                                         urlText = ""
                                         homeState = HomeState.Empty
                                     },
-                                    snackbarHostState = snackbarHostState,
                                     onNavigateToDownloads = onNavigateToDownloads
                                 )
                             }
@@ -250,7 +248,18 @@ fun HomeScreen(
                 shape = RoundedCornerShape(12.dp)
             )
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Fetch button — always directly under URL field
+            Button(
+                onClick = { fetchMetadata() },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 32.dp),
+                enabled = urlText.isNotBlank() && homeState !is HomeState.Loading
+            ) {
+                Text("Fetch")
+            }
 
             when (val state = homeState) {
                 HomeState.Empty -> {
@@ -258,19 +267,19 @@ fun HomeScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Spacer(modifier = Modifier.height(48.dp))
+                        Spacer(modifier = Modifier.height(24.dp))
 
                         // Cosmic rabbit with headphones image
                         Image(
                             painter = painterResource(id = R.drawable.app_branding),
                             contentDescription = "TuneDroid - Music Rabbit",
                             modifier = Modifier
-                                .size(240.dp)
+                                .size(200.dp)
                                 .clip(RoundedCornerShape(16.dp)),
                             contentScale = ContentScale.Crop
                         )
 
-                        Spacer(modifier = Modifier.height(24.dp))
+                        Spacer(modifier = Modifier.height(16.dp))
 
                         // App name text below image
                         Text(
@@ -280,24 +289,11 @@ fun HomeScreen(
                             color = MaterialTheme.colorScheme.primary
                         )
 
-                        Spacer(modifier = Modifier.height(48.dp))
-
-                        // Fetch button
-                        Button(
-                            onClick = { fetchMetadata() },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 32.dp),
-                            enabled = urlText.isNotBlank()
-                        ) {
-                            Text("Fetch")
-                        }
-
                         Spacer(modifier = Modifier.height(16.dp))
 
                         // Tip text
                         Text(
-                            text = "Tip: Share a video directly to TuneDroid from your browser",
+                            text = "Tip: Share a video directly to TuneDroid from your browser or other apps",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(horizontal = 32.dp)
@@ -306,12 +302,31 @@ fun HomeScreen(
                 }
 
                 HomeState.Loading -> {
-                    Spacer(modifier = Modifier.height(24.dp))
-                    MarqueeLoadingIndicator()
-                    Spacer(modifier = Modifier.height(24.dp))
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Spacer(modifier = Modifier.height(24.dp))
+
+                        // Show bunny during loading
+                        Image(
+                            painter = painterResource(id = R.drawable.app_branding),
+                            contentDescription = "TuneDroid - Music Rabbit",
+                            modifier = Modifier
+                                .size(200.dp)
+                                .clip(RoundedCornerShape(16.dp)),
+                            contentScale = ContentScale.Crop
+                        )
+
+                        Spacer(modifier = Modifier.height(24.dp))
+
+                        MarqueeLoadingIndicator()
+                    }
                 }
 
                 is HomeState.MediaLoaded -> {
+                    Spacer(modifier = Modifier.height(8.dp))
+
                     // Media info card
                     Card(
                         modifier = Modifier.fillMaxWidth(),
@@ -378,7 +393,7 @@ fun HomeScreen(
                         val displayLabel = if (preset == FormatPreset.ORIGINAL) {
                             val ext = state.selectedStream.extension.uppercase()
                             val bitrate = state.selectedStream.bitrate
-                            "Original (no conversion) — $ext $bitrate kbps"
+                            "Original — $ext $bitrate kbps"
                         } else {
                             preset.label
                         }
@@ -467,7 +482,6 @@ private suspend fun performEnqueue(
     mediaId: String,
     selectedPreset: FormatPreset,
     onDone: () -> Unit,
-    snackbarHostState: SnackbarHostState,
     onNavigateToDownloads: () -> Unit
 ) {
     val download = DownloadEntity(
@@ -487,14 +501,8 @@ private suspend fun performEnqueue(
 
     onDone()
 
-    val result = snackbarHostState.showSnackbar(
-        message = "Download started",
-        actionLabel = "View",
-        duration = SnackbarDuration.Short
-    )
-    if (result == SnackbarResult.ActionPerformed) {
-        onNavigateToDownloads()
-    }
+    // Auto-navigate to Downloads screen
+    onNavigateToDownloads()
 }
 
 private fun formatDuration(seconds: Long): String {
