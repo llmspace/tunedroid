@@ -7,6 +7,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -35,7 +36,7 @@ fun SettingsScreen(onNavigateBack: () -> Unit) {
     val storagePath by prefsManager.storagePath.collectAsState(initial = "")
     val defaultFormat by prefsManager.defaultFormat.collectAsState(initial = "MP3_128")
     val autoCheckUpdates by prefsManager.autoCheckUpdates.collectAsState(initial = true)
-    val autoUpdateEngine by prefsManager.autoUpdateEngine.collectAsState(initial = true)
+    val autoUpdateEngine by prefsManager.autoUpdateEngine.collectAsState(initial = false)
     val deleteOriginal by prefsManager.deleteOriginal.collectAsState(initial = true)
     val wifiOnly by prefsManager.wifiOnly.collectAsState(initial = false)
 
@@ -136,14 +137,77 @@ fun SettingsScreen(onNavigateBack: () -> Unit) {
                 .padding(innerPadding)
                 .verticalScroll(rememberScrollState())
         ) {
+            // App info + update button — at the top
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "TuneDroid v${BuildConfig.VERSION_NAME}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "Engine: $engineVersion",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                TextButton(
+                    onClick = {
+                        isCheckingUpdate = true
+                        scope.launch {
+                            try {
+                                val appUpdate = AppUpdateChecker.check(context)
+                                if (appUpdate != null && appUpdate.isNewer) {
+                                    withContext(Dispatchers.Main) {
+                                        AppUpdateChecker.showUpdateDialog(context, appUpdate)
+                                    }
+                                } else {
+                                    val result = EngineUpdater.update(context)
+                                    engineVersion = EngineUpdater.getEngineVersion()
+                                    when (result) {
+                                        is com.tunedroid.app.engine.UpdateResult.Updated ->
+                                            Toast.makeText(context, "Engine updated to ${result.version}", Toast.LENGTH_SHORT).show()
+                                        is com.tunedroid.app.engine.UpdateResult.AlreadyUpToDate ->
+                                            Toast.makeText(context, "Everything is up to date", Toast.LENGTH_SHORT).show()
+                                        is com.tunedroid.app.engine.UpdateResult.Error ->
+                                            Toast.makeText(context, "Update check failed: ${result.message}", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            } catch (e: Exception) {
+                                Toast.makeText(context, "Update check failed", Toast.LENGTH_SHORT).show()
+                            } finally {
+                                isCheckingUpdate = false
+                            }
+                        }
+                    },
+                    enabled = !isCheckingUpdate
+                ) {
+                    if (isCheckingUpdate) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(14.dp),
+                            strokeWidth = 2.dp
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                    }
+                    Text("Check for updates", style = MaterialTheme.typography.labelMedium)
+                }
+            }
+
+            HorizontalDivider()
+
             // Storage location
             SettingsItem(
                 title = "Storage location",
                 subtitle = storagePath.ifBlank { "Default" },
                 onClick = {
-                    // SAF folder picker would go here
                     Toast.makeText(context, "Storage picker will be opened", Toast.LENGTH_SHORT).show()
-                }
+                },
+                showChevron = true
             )
 
             HorizontalDivider()
@@ -156,7 +220,8 @@ fun SettingsScreen(onNavigateBack: () -> Unit) {
                 } catch (_: Exception) {
                     "MP3 — Standard (128 kbps)"
                 },
-                onClick = { showFormatPicker = true }
+                onClick = { showFormatPicker = true },
+                showChevron = true
             )
 
             HorizontalDivider()
@@ -205,136 +270,72 @@ fun SettingsScreen(onNavigateBack: () -> Unit) {
 
             HorizontalDivider()
 
-            Spacer(modifier = Modifier.height(24.dp))
+            // Scan for orphaned files — compact row
+            SettingsItem(
+                title = "Scan for orphaned files",
+                subtitle = if (isScanning) "Scanning..." else "Find files or records without matches",
+                onClick = {
+                    if (isScanning) return@SettingsItem
+                    isScanning = true
+                    scope.launch {
+                        val orphanedFiles = repository.findOrphanedFiles()
+                        val orphanedRecords = repository.findOrphanedRecords()
 
-            // Storage cleanup section
-            Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-                Text(
-                    text = "Storage",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                OutlinedButton(
-                    onClick = {
-                        isScanning = true
-                        scope.launch {
-                            val orphanedFiles = repository.findOrphanedFiles()
-                            val orphanedRecords = repository.findOrphanedRecords()
-
-                            cleanupDialogMessage = buildString {
-                                appendLine("Found:")
-                                appendLine("• ${orphanedFiles.size} orphaned file${if (orphanedFiles.size != 1) "s" else ""}")
-                                appendLine("• ${orphanedRecords.size} orphaned record${if (orphanedRecords.size != 1) "s" else ""}")
-                                appendLine()
-                                if (orphanedFiles.isNotEmpty() || orphanedRecords.isNotEmpty()) {
-                                    appendLine("Delete these items?")
-                                } else {
-                                    appendLine("No cleanup needed!")
-                                }
-                            }
-                            isScanning = false
-                            showCleanupDialog = true
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = !isScanning
-                ) {
-                    Text(if (isScanning) "Scanning..." else "Scan for Orphaned Files")
-                }
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "Find and remove files without database records or database records without files.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // App info
-            Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-                Text(
-                    text = "TuneDroid v${BuildConfig.VERSION_NAME}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "Engine: $engineVersion",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                OutlinedButton(
-                    onClick = {
-                        isCheckingUpdate = true
-                        scope.launch {
-                            try {
-                                // Check app update
-                                val appUpdate = AppUpdateChecker.check(context)
-                                if (appUpdate != null && appUpdate.isNewer) {
-                                    withContext(Dispatchers.Main) {
-                                        AppUpdateChecker.showUpdateDialog(context, appUpdate)
-                                    }
-                                } else {
-                                    // No app update — check engine update
-                                    val result = EngineUpdater.update(context)
-                                    engineVersion = EngineUpdater.getEngineVersion()
-                                    when (result) {
-                                        is com.tunedroid.app.engine.UpdateResult.Updated ->
-                                            Toast.makeText(context, "Engine updated to ${result.version}", Toast.LENGTH_SHORT).show()
-                                        is com.tunedroid.app.engine.UpdateResult.AlreadyUpToDate ->
-                                            Toast.makeText(context, "Everything is up to date", Toast.LENGTH_SHORT).show()
-                                        is com.tunedroid.app.engine.UpdateResult.Error ->
-                                            Toast.makeText(context, "Update check failed: ${result.message}", Toast.LENGTH_SHORT).show()
-                                    }
-                                }
-                            } catch (e: Exception) {
-                                Toast.makeText(context, "Update check failed", Toast.LENGTH_SHORT).show()
-                            } finally {
-                                isCheckingUpdate = false
+                        cleanupDialogMessage = buildString {
+                            appendLine("Found:")
+                            appendLine("• ${orphanedFiles.size} orphaned file${if (orphanedFiles.size != 1) "s" else ""}")
+                            appendLine("• ${orphanedRecords.size} orphaned record${if (orphanedRecords.size != 1) "s" else ""}")
+                            appendLine()
+                            if (orphanedFiles.isNotEmpty() || orphanedRecords.isNotEmpty()) {
+                                appendLine("Delete these items?")
+                            } else {
+                                appendLine("No cleanup needed!")
                             }
                         }
-                    },
-                    enabled = !isCheckingUpdate
-                ) {
-                    if (isCheckingUpdate) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
-                            strokeWidth = 2.dp
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
+                        isScanning = false
+                        showCleanupDialog = true
                     }
-                    Text("Check for updates now")
                 }
-            }
+            )
 
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(16.dp))
         }
     }
 }
 
 @Composable
-private fun SettingsItem(title: String, subtitle: String, onClick: () -> Unit) {
-    Column(
+private fun SettingsItem(
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit,
+    showChevron: Boolean = false
+) {
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 14.dp)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.bodyLarge
-        )
-        Spacer(modifier = Modifier.height(2.dp))
-        Text(
-            text = subtitle,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        if (showChevron) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
     }
 }
 

@@ -53,4 +53,7 @@ interface DownloadDao {
 
     @Query("SELECT COUNT(*) FROM downloads WHERE status IN ('downloading', 'converting', 'finalizing')")
     suspend fun getActiveCount(): Int
+
+    @Query("SELECT COUNT(*) FROM downloads")
+    suspend fun getTotalCount(): Int
 }

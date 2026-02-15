@@ -3,6 +3,7 @@ package com.tunedroid.app.data.repository
 import android.content.Context
 import com.tunedroid.app.data.PreferencesManager
 import com.tunedroid.app.data.database.*
+import com.tunedroid.app.engine.FormatPreset
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import java.io.File
@@ -99,6 +100,56 @@ class DownloadRepository(context: Context) {
 
         orphanedFiles.forEach { it.delete() }
         orphanedRecords.forEach { dao.delete(it) }
+    }
+
+    /**
+     * Scans the TuneDroid folder for existing audio files when the database is empty.
+     * Creates COMPLETED entries so previously downloaded files reappear after reinstall.
+     * @return number of files recovered
+     */
+    suspend fun recoverExistingFiles(): Int {
+        if (dao.getTotalCount() > 0) return 0
+
+        val storageDir = File(prefsManager.storagePath.first())
+        if (!storageDir.exists()) return 0
+
+        val audioExtensions = setOf("mp3", "m4a", "opus", "ogg", "webm", "aac", "wav")
+
+        val audioFiles = storageDir.listFiles()
+            ?.filter { file ->
+                file.isFile &&
+                file.extension.lowercase() in audioExtensions &&
+                file.length() > 0 &&
+                !file.name.endsWith(".part") &&
+                !file.name.endsWith(".temp")
+            }
+            ?: return 0
+
+        if (audioFiles.isEmpty()) return 0
+
+        var recoveredCount = 0
+        for (file in audioFiles) {
+            val formatPreset = when (file.extension.lowercase()) {
+                "mp3" -> FormatPreset.MP3_128.name
+                else -> FormatPreset.ORIGINAL.name
+            }
+            val entity = DownloadEntity(
+                mediaId = "recovered_${file.name.hashCode()}",
+                title = file.nameWithoutExtension,
+                author = "",
+                url = "",
+                formatPreset = formatPreset,
+                filePath = file.absolutePath,
+                fileSize = file.length(),
+                status = DownloadStatus.COMPLETED,
+                progress = 100f,
+                createdAt = file.lastModified(),
+                completedAt = file.lastModified()
+            )
+            dao.insert(entity)
+            recoveredCount++
+        }
+        return recoveredCount
     }
 
     private suspend fun getAllDownloadsSnapshot(): List<DownloadEntity> {

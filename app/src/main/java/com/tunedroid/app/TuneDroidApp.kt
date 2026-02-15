@@ -11,6 +11,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 class TuneDroidApp : Application() {
@@ -58,22 +59,29 @@ class TuneDroidApp : Application() {
                 engineDeferred.complete(true)
                 Log.d(TAG, "Engine fully ready")
 
-                // Auto-update the extraction engine
-                // The bundled version is often outdated and causes 403 errors
-                Log.d(TAG, "Starting automatic engine update...")
-                try {
-                    val updateResult = EngineUpdater.update(this@TuneDroidApp)
-                    when (updateResult) {
-                        is com.tunedroid.app.engine.UpdateResult.Updated ->
-                            Log.d(TAG, "Engine updated to: ${updateResult.version}")
-                        is com.tunedroid.app.engine.UpdateResult.AlreadyUpToDate ->
-                            Log.d(TAG, "Engine already up to date")
-                        is com.tunedroid.app.engine.UpdateResult.Error ->
-                            Log.w(TAG, "Engine update failed (non-critical): ${updateResult.message}")
+                // Auto-update the extraction engine (only if enabled)
+                val prefsManager = com.tunedroid.app.data.PreferencesManager(this@TuneDroidApp)
+                val shouldAutoUpdate = prefsManager.autoUpdateEngine.first()
+
+                if (shouldAutoUpdate) {
+                    Log.d(TAG, "Starting automatic engine update...")
+                    try {
+                        val updateResult = EngineUpdater.update(this@TuneDroidApp)
+                        when (updateResult) {
+                            is com.tunedroid.app.engine.UpdateResult.Updated ->
+                                Log.d(TAG, "Engine updated to: ${updateResult.version}")
+                            is com.tunedroid.app.engine.UpdateResult.AlreadyUpToDate ->
+                                Log.d(TAG, "Engine already up to date")
+                            is com.tunedroid.app.engine.UpdateResult.Error ->
+                                Log.w(TAG, "Engine update failed (non-critical): ${updateResult.message}")
+                        }
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Engine update failed (non-critical): ${e.message}")
+                    } finally {
+                        engineUpdateDeferred.complete(true)
                     }
-                } catch (e: Exception) {
-                    Log.w(TAG, "Engine update failed (non-critical): ${e.message}")
-                } finally {
+                } else {
+                    Log.d(TAG, "Auto-update engine disabled, skipping")
                     engineUpdateDeferred.complete(true)
                 }
             } catch (e: Exception) {

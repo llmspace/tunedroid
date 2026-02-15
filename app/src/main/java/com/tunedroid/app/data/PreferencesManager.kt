@@ -35,7 +35,7 @@ class PreferencesManager(private val context: Context) {
     }
 
     val autoUpdateEngine: Flow<Boolean> = context.dataStore.data.map { prefs ->
-        prefs[AUTO_UPDATE_ENGINE] ?: true
+        prefs[AUTO_UPDATE_ENGINE] ?: false
     }
 
     val deleteOriginal: Flow<Boolean> = context.dataStore.data.map { prefs ->

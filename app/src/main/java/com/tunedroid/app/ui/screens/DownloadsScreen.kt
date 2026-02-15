@@ -20,7 +20,9 @@ import com.tunedroid.app.data.database.DownloadEntity
 import com.tunedroid.app.data.database.DownloadStatus
 import com.tunedroid.app.data.repository.DownloadRepository
 import com.tunedroid.app.service.DownloadService
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
@@ -44,6 +46,24 @@ fun DownloadsScreen() {
     }
     val failedDownloads = allDownloads.filter { it.status == DownloadStatus.FAILED }
     val completedDownloads = allDownloads.filter { it.status == DownloadStatus.COMPLETED }
+
+    var hasAttemptedRecovery by remember { mutableStateOf(false) }
+
+    // Recover existing files after reinstall (DB empty but files exist on disk)
+    LaunchedEffect(allDownloads.isEmpty(), hasAttemptedRecovery) {
+        if (allDownloads.isEmpty() && !hasAttemptedRecovery) {
+            hasAttemptedRecovery = true
+            val recovered = withContext(Dispatchers.IO) {
+                repository.recoverExistingFiles()
+            }
+            if (recovered > 0) {
+                snackbarHostState.showSnackbar(
+                    message = "Recovered $recovered previously downloaded file${if (recovered != 1) "s" else ""}",
+                    duration = SnackbarDuration.Short
+                )
+            }
+        }
+    }
 
     var showDeleteDialog by remember { mutableStateOf(false) }
     var downloadToDelete by remember { mutableStateOf<DownloadEntity?>(null) }

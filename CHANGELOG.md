@@ -2,6 +2,26 @@
 
 All notable changes to TuneDroid will be documented in this file.
 
+## [1.0.3] - 2026-02-15
+
+### Improved
+- **Settings layout**: App version and "Check for updates" button now at the top — no scrolling needed
+- **Default format**: Chevron icon makes it obvious the setting is tappable
+- **Orphan scanner**: Compact settings row instead of large button with description
+- **Auto-update engine**: Now defaults to OFF — users opt in manually
+
+### Added
+- **Download recovery**: After reinstall, existing audio files in the TuneDroid folder are automatically rediscovered and shown in the Downloads screen
+
+### Fixed
+- In-app update check now correctly shows update dialog when a new version is available
+- Auto-update engine preference is now respected on startup (was previously ignored)
+
+### Technical
+- TuneDroidApp reads `autoUpdateEngine` preference before calling engine update
+- DownloadRepository.recoverExistingFiles() scans storage folder when DB is empty
+- SettingsItem composable supports optional trailing chevron icon
+
 ## [1.0.2] - 2026-02-15
 
 ### Improved
