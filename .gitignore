@@ -1,0 +1,46 @@
+# Android/Gradle Build Artifacts
+.gradle/
+.idea/
+build/
+*.apk
+*.aar
+*.jks
+*.keystore
+local.properties
+gradle.properties.local
+signing.properties
+keystore.properties
+
+# Kotlin Compiler Cache
+.kotlin/
+
+# IDE Files
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+.vscode/
+*.iml
+*.iws
+*.ipr
+
+# macOS System Files
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Editor Temporary Files
+*.swp
+*.swo
+*~
+
+# Native Libraries (auto-generated)
+*.o
+*.so
+*.dylib
+
+# Python Virtual Env (if used)
+venv/
+env/

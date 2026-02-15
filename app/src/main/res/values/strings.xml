@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">TuneDroid</string>
+    <string name="notification_channel_download">Downloads</string>
+    <string name="notification_channel_download_desc">Download progress and completion</string>
+</resources>

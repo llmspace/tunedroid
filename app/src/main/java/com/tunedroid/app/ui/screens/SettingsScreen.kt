@@ -1,0 +1,355 @@
+package com.tunedroid.app.ui.screens
+
+import android.widget.Toast
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import com.tunedroid.app.BuildConfig
+import com.tunedroid.app.data.PreferencesManager
+import com.tunedroid.app.data.repository.DownloadRepository
+import com.tunedroid.app.engine.EngineUpdater
+import com.tunedroid.app.engine.FormatPreset
+import com.tunedroid.app.updater.AppUpdateChecker
+import kotlinx.coroutines.launch
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SettingsScreen(onNavigateBack: () -> Unit) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val prefsManager = remember { PreferencesManager(context) }
+    val repository = remember { DownloadRepository(context) }
+
+    val storagePath by prefsManager.storagePath.collectAsState(initial = "")
+    val defaultFormat by prefsManager.defaultFormat.collectAsState(initial = "MP3_128")
+    val autoCheckUpdates by prefsManager.autoCheckUpdates.collectAsState(initial = true)
+    val autoUpdateEngine by prefsManager.autoUpdateEngine.collectAsState(initial = true)
+    val deleteOriginal by prefsManager.deleteOriginal.collectAsState(initial = true)
+    val wifiOnly by prefsManager.wifiOnly.collectAsState(initial = false)
+
+    var engineVersion by remember { mutableStateOf("Loading...") }
+    var isCheckingUpdate by remember { mutableStateOf(false) }
+    var showFormatPicker by remember { mutableStateOf(false) }
+    var showCleanupDialog by remember { mutableStateOf(false) }
+    var cleanupDialogMessage by remember { mutableStateOf("") }
+    var isScanning by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        engineVersion = EngineUpdater.getEngineVersion()
+    }
+
+    // Format picker dialog
+    if (showFormatPicker) {
+        AlertDialog(
+            onDismissRequest = { showFormatPicker = false },
+            title = { Text("Default Format") },
+            text = {
+                Column {
+                    FormatPreset.entries.forEach { preset ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    scope.launch {
+                                        prefsManager.setDefaultFormat(preset.name)
+                                    }
+                                    showFormatPicker = false
+                                }
+                                .padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = defaultFormat == preset.name,
+                                onClick = {
+                                    scope.launch {
+                                        prefsManager.setDefaultFormat(preset.name)
+                                    }
+                                    showFormatPicker = false
+                                }
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(preset.label)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showFormatPicker = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // Cleanup dialog
+    if (showCleanupDialog) {
+        AlertDialog(
+            onDismissRequest = { showCleanupDialog = false },
+            title = { Text("Cleanup Results") },
+            text = { Text(cleanupDialogMessage) },
+            confirmButton = {
+                TextButton(onClick = {
+                    scope.launch {
+                        repository.cleanupOrphans()
+                        showCleanupDialog = false
+                        Toast.makeText(context, "Cleanup completed", Toast.LENGTH_SHORT).show()
+                    }
+                }) {
+                    Text("Clean Up", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCleanupDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Settings") },
+                navigationIcon = {
+                    IconButton(onClick = onNavigateBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                }
+            )
+        }
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .verticalScroll(rememberScrollState())
+        ) {
+            // Storage location
+            SettingsItem(
+                title = "Storage location",
+                subtitle = storagePath.ifBlank { "Default" },
+                onClick = {
+                    // SAF folder picker would go here
+                    Toast.makeText(context, "Storage picker will be opened", Toast.LENGTH_SHORT).show()
+                }
+            )
+
+            HorizontalDivider()
+
+            // Default format
+            SettingsItem(
+                title = "Default format",
+                subtitle = try {
+                    FormatPreset.valueOf(defaultFormat).label
+                } catch (_: Exception) {
+                    "MP3 — Standard (128 kbps)"
+                },
+                onClick = { showFormatPicker = true }
+            )
+
+            HorizontalDivider()
+
+            // Auto-check for app updates
+            SettingsToggle(
+                title = "Auto-check for app updates",
+                checked = autoCheckUpdates,
+                onCheckedChange = {
+                    scope.launch { prefsManager.setAutoCheckUpdates(it) }
+                }
+            )
+
+            HorizontalDivider()
+
+            // Auto-update extraction engine
+            SettingsToggle(
+                title = "Auto-update extraction engine",
+                checked = autoUpdateEngine,
+                onCheckedChange = {
+                    scope.launch { prefsManager.setAutoUpdateEngine(it) }
+                }
+            )
+
+            HorizontalDivider()
+
+            // Delete original after conversion
+            SettingsToggle(
+                title = "Delete original after conversion",
+                checked = deleteOriginal,
+                onCheckedChange = {
+                    scope.launch { prefsManager.setDeleteOriginal(it) }
+                }
+            )
+
+            HorizontalDivider()
+
+            // Wi-Fi only downloads
+            SettingsToggle(
+                title = "Wi-Fi only downloads",
+                checked = wifiOnly,
+                onCheckedChange = {
+                    scope.launch { prefsManager.setWifiOnly(it) }
+                }
+            )
+
+            HorizontalDivider()
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Storage cleanup section
+            Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                Text(
+                    text = "Storage",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedButton(
+                    onClick = {
+                        isScanning = true
+                        scope.launch {
+                            val orphanedFiles = repository.findOrphanedFiles()
+                            val orphanedRecords = repository.findOrphanedRecords()
+
+                            cleanupDialogMessage = buildString {
+                                appendLine("Found:")
+                                appendLine("• ${orphanedFiles.size} orphaned file${if (orphanedFiles.size != 1) "s" else ""}")
+                                appendLine("• ${orphanedRecords.size} orphaned record${if (orphanedRecords.size != 1) "s" else ""}")
+                                appendLine()
+                                if (orphanedFiles.isNotEmpty() || orphanedRecords.isNotEmpty()) {
+                                    appendLine("Delete these items?")
+                                } else {
+                                    appendLine("No cleanup needed!")
+                                }
+                            }
+                            isScanning = false
+                            showCleanupDialog = true
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !isScanning
+                ) {
+                    Text(if (isScanning) "Scanning..." else "Scan for Orphaned Files")
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Find and remove files without database records or database records without files.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // App info
+            Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                Text(
+                    text = "TuneDroid v${BuildConfig.VERSION_NAME}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Engine: $engineVersion",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                OutlinedButton(
+                    onClick = {
+                        isCheckingUpdate = true
+                        scope.launch {
+                            try {
+                                // Check app update
+                                AppUpdateChecker.check(context)
+                                // Update engine
+                                val result = EngineUpdater.update(context)
+                                engineVersion = EngineUpdater.getEngineVersion()
+                                when (result) {
+                                    is com.tunedroid.app.engine.UpdateResult.Updated ->
+                                        Toast.makeText(context, "Engine updated to ${result.version}", Toast.LENGTH_SHORT).show()
+                                    is com.tunedroid.app.engine.UpdateResult.AlreadyUpToDate ->
+                                        Toast.makeText(context, "Everything is up to date", Toast.LENGTH_SHORT).show()
+                                    is com.tunedroid.app.engine.UpdateResult.Error ->
+                                        Toast.makeText(context, "Update check failed: ${result.message}", Toast.LENGTH_SHORT).show()
+                                }
+                            } catch (e: Exception) {
+                                Toast.makeText(context, "Update check failed", Toast.LENGTH_SHORT).show()
+                            } finally {
+                                isCheckingUpdate = false
+                            }
+                        }
+                    },
+                    enabled = !isCheckingUpdate
+                ) {
+                    if (isCheckingUpdate) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                    }
+                    Text("Check for updates now")
+                }
+            }
+
+            Spacer(modifier = Modifier.height(32.dp))
+        }
+    }
+}
+
+@Composable
+private fun SettingsItem(title: String, subtitle: String, onClick: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 14.dp)
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.bodyLarge
+        )
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(
+            text = subtitle,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@Composable
+private fun SettingsToggle(
+    title: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.weight(1f)
+        )
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange
+        )
+    }
+}
