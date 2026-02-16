@@ -2,6 +2,22 @@
 
 All notable changes to TuneDroid will be documented in this file.
 
+## [1.0.10] - 2026-02-16
+
+### Fixed
+- **Delete file from device on MIUI/Xiaomi**: File deletion now works on restrictive OEM ROMs (MIUI, ColorOS, etc.) that block standard file operations in shared storage
+- Added `MANAGE_EXTERNAL_STORAGE` permission for full file management access on Android 11+
+- Permission is requested only when the user tries to delete a file from device — not on first launch
+
+### Added
+- **"File management access" in Settings**: Shows permission status and allows granting it proactively — helpful for troubleshooting on devices with restrictive storage policies
+
+### Technical
+- New `StoragePermissionHelper` utility for checking/requesting All Files Access permission
+- Permission gate in DownloadsScreen: checks before device file deletion, shows dialog to open Settings if not granted
+- After user grants permission in Settings and returns, the pending delete executes automatically
+- SettingsScreen uses `LifecycleEventObserver` to refresh permission status on resume
+
 ## [1.0.9] - 2026-02-16
 
 ### Fixed

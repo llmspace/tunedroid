@@ -15,11 +15,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.tunedroid.app.BuildConfig
 import com.tunedroid.app.data.PreferencesManager
 import com.tunedroid.app.data.repository.DownloadRepository
 import com.tunedroid.app.engine.EngineUpdater
 import com.tunedroid.app.updater.AppUpdateChecker
+import com.tunedroid.app.util.StoragePermissionHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -203,6 +207,38 @@ fun SettingsScreen(onNavigateBack: () -> Unit) {
                     scope.launch { prefsManager.setWifiOnly(it) }
                 }
             )
+
+            // File management access (API 30+ only — needed for MIUI and other restrictive ROMs)
+            if (StoragePermissionHelper.isAllFilesAccessRelevant()) {
+                HorizontalDivider()
+
+                var hasAllFilesAccess by remember {
+                    mutableStateOf(StoragePermissionHelper.hasAllFilesAccess())
+                }
+
+                val lifecycleOwner = LocalLifecycleOwner.current
+                DisposableEffect(lifecycleOwner) {
+                    val observer = LifecycleEventObserver { _, event ->
+                        if (event == Lifecycle.Event.ON_RESUME) {
+                            hasAllFilesAccess = StoragePermissionHelper.hasAllFilesAccess()
+                        }
+                    }
+                    lifecycleOwner.lifecycle.addObserver(observer)
+                    onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+                }
+
+                SettingsItem(
+                    title = "File management access",
+                    subtitle = if (hasAllFilesAccess) "Granted" else "Required for deleting files on some devices",
+                    onClick = {
+                        if (!hasAllFilesAccess) {
+                            context.startActivity(
+                                StoragePermissionHelper.createAllFilesAccessIntent(context)
+                            )
+                        }
+                    }
+                )
+            }
 
             HorizontalDivider()
 

@@ -30,6 +30,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
+import com.tunedroid.app.util.StoragePermissionHelper
 import com.tunedroid.app.data.database.DownloadEntity
 import com.tunedroid.app.data.database.DownloadStatus
 import com.tunedroid.app.data.repository.DownloadRepository
@@ -111,6 +112,26 @@ fun DownloadsScreen() {
     var showDeleteDialog by remember { mutableStateOf(false) }
     var downloadToDelete by remember { mutableStateOf<DownloadEntity?>(null) }
 
+    // All Files Access permission state for file deletion on API 30+ (MIUI etc.)
+    var showAllFilesAccessDialog by remember { mutableStateOf(false) }
+    var pendingDeleteAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+
+    val allFilesAccessLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        if (StoragePermissionHelper.hasAllFilesAccess()) {
+            pendingDeleteAction?.invoke()
+        } else {
+            scope.launch {
+                snackbarHostState.showSnackbar(
+                    message = "File management permission is required to delete files from device",
+                    duration = SnackbarDuration.Long
+                )
+            }
+        }
+        pendingDeleteAction = null
+    }
+
     if (showDeleteDialog && downloadToDelete != null) {
         var deleteFromApp by remember { mutableStateOf(true) }
         var deleteFromDevice by remember { mutableStateOf(false) }
@@ -176,26 +197,36 @@ fun DownloadsScreen() {
                         downloadToDelete = null
 
                         if (targetDownload != null) {
-                            scope.launch {
-                                // Delete from device if requested
-                                if (shouldDeleteFromDevice) {
-                                    targetDownload.filePath?.let { path ->
-                                        val success = withContext(Dispatchers.IO) {
-                                            deleteFileFromDevice(context, path)
-                                        }
-                                        if (!success) {
-                                            snackbarHostState.showSnackbar(
-                                                message = "Could not delete file from device",
-                                                duration = SnackbarDuration.Long
-                                            )
+                            val executeDelete: () -> Unit = {
+                                scope.launch {
+                                    if (shouldDeleteFromDevice) {
+                                        targetDownload.filePath?.let { path ->
+                                            val success = withContext(Dispatchers.IO) {
+                                                deleteFileFromDevice(context, path)
+                                            }
+                                            if (!success) {
+                                                snackbarHostState.showSnackbar(
+                                                    message = "Could not delete file from device",
+                                                    duration = SnackbarDuration.Long
+                                                )
+                                            }
                                         }
                                     }
+                                    if (shouldDeleteFromApp) {
+                                        repository.delete(targetDownload)
+                                    }
                                 }
+                            }
 
-                                // Remove from app database if requested
-                                if (shouldDeleteFromApp) {
-                                    repository.delete(targetDownload)
-                                }
+                            // Check if All Files Access is needed for device deletion
+                            if (shouldDeleteFromDevice &&
+                                StoragePermissionHelper.isAllFilesAccessRelevant() &&
+                                !StoragePermissionHelper.hasAllFilesAccess()
+                            ) {
+                                pendingDeleteAction = executeDelete
+                                showAllFilesAccessDialog = true
+                            } else {
+                                executeDelete()
                             }
                         }
                     },
@@ -208,6 +239,41 @@ fun DownloadsScreen() {
                 TextButton(onClick = {
                     showDeleteDialog = false
                     downloadToDelete = null
+                }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // All Files Access permission dialog
+    if (showAllFilesAccessDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showAllFilesAccessDialog = false
+                pendingDeleteAction = null
+            },
+            title = { Text("File Access Required") },
+            text = {
+                Text(
+                    "To delete downloaded files from your device, TuneDroid needs " +
+                    "the \"All Files Access\" permission. This will open your device settings."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showAllFilesAccessDialog = false
+                    allFilesAccessLauncher.launch(
+                        StoragePermissionHelper.createAllFilesAccessIntent(context)
+                    )
+                }) {
+                    Text("Open Settings")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showAllFilesAccessDialog = false
+                    pendingDeleteAction = null
                 }) {
                     Text("Cancel")
                 }
