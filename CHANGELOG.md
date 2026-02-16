@@ -2,6 +2,21 @@
 
 All notable changes to TuneDroid will be documented in this file.
 
+## [1.0.7] - 2026-02-16
+
+### Changed
+- **Unified Fetch/Download button**: Single button changes from "Fetch" to "Download" after metadata loads — cleaner UI with no separate download button
+- **Settings**: Renamed "Delete original after conversion" to "Delete original audio file after conversion" for clarity
+
+### Fixed
+- **Delete not working**: Trash icon on Downloads screen now correctly deletes files from app list and/or device — fixed race condition where dialog state was cleared before async delete executed
+- **Original format cleanup**: Original audio files are never deleted when user chose "Original" format (no conversion) — delete-original preference only applies to MP3 conversions
+
+### Technical
+- HomeScreen: merged fetch/download into single stateful Button with label based on HomeState
+- DownloadsScreen: captured downloadToDelete and checkbox states in local variables before clearing dialog state, preventing null reference in coroutine
+- DownloadService: wired deleteOriginal DataStore preference into cleanup logic — skips cleanup when preset.requiresConversion is false
+
 ## [1.0.6] - 2026-02-16
 
 ### Changed

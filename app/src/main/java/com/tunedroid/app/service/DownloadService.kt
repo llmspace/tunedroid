@@ -251,7 +251,9 @@ class DownloadService : Service() {
                 Log.d(TAG, "Download complete: ${outputFile.absolutePath} (${outputFile.length()} bytes)")
 
                 // Clean up intermediate/original files left by yt-dlp
-                if (preset.requiresConversion) {
+                // Only when converting (e.g. to MP3) and user hasn't disabled it
+                val shouldDeleteOriginal = prefsManager.deleteOriginal.first()
+                if (preset.requiresConversion && shouldDeleteOriginal) {
                     cleanupIntermediateFiles(storagePath, safeTitle, outputFile.name)
                 }
 

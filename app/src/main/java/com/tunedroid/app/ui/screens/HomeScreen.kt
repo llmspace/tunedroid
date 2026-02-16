@@ -249,15 +249,24 @@ fun HomeScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Fetch button — always directly under URL field
+            // Unified Fetch / Download button — stays in same position
+            val isMediaLoaded = homeState is HomeState.MediaLoaded
             Button(
-                onClick = { fetchMetadata() },
+                onClick = {
+                    if (isMediaLoaded) {
+                        val state = homeState as HomeState.MediaLoaded
+                        startDownload(state.mediaInfo, state.selectedStream)
+                    } else {
+                        fetchMetadata()
+                    }
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 32.dp),
-                enabled = urlText.isNotBlank() && homeState !is HomeState.Loading
+                enabled = if (isMediaLoaded) true
+                    else urlText.isNotBlank() && homeState !is HomeState.Loading
             ) {
-                Text("Fetch")
+                Text(if (isMediaLoaded) "Download" else "Fetch")
             }
 
             when (val state = homeState) {
@@ -426,24 +435,6 @@ fun HomeScreen(
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(24.dp))
-
-                        // Download button
-                        Button(
-                            onClick = {
-                                startDownload(state.mediaInfo, state.selectedStream)
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(56.dp),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Text(
-                                text = "Download",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
                     }
                 }
 

@@ -184,9 +184,9 @@ fun SettingsScreen(onNavigateBack: () -> Unit) {
 
             HorizontalDivider()
 
-            // Delete original after conversion
+            // Delete original audio file after conversion
             SettingsToggle(
-                title = "Delete original after conversion",
+                title = "Delete original audio file after conversion",
                 checked = deleteOriginal,
                 onCheckedChange = {
                     scope.launch { prefsManager.setDeleteOriginal(it) }

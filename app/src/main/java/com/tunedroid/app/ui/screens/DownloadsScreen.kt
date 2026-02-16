@@ -163,34 +163,40 @@ fun DownloadsScreen() {
             confirmButton = {
                 TextButton(
                     onClick = {
-                        scope.launch {
-                            var fileDeleteSuccess = true
+                        // Capture values before clearing state — the coroutine runs async
+                        val targetDownload = downloadToDelete
+                        val shouldDeleteFromApp = deleteFromApp
+                        val shouldDeleteFromDevice = deleteFromDevice
 
-                            // Delete from device if requested
-                            if (deleteFromDevice) {
-                                downloadToDelete?.filePath?.let { path ->
-                                    fileDeleteSuccess = try {
-                                        File(path).delete()
-                                    } catch (e: Exception) {
-                                        android.util.Log.w("DownloadsScreen", "Failed to delete file: $path", e)
-                                        false
-                                    }
-                                    if (!fileDeleteSuccess) {
-                                        snackbarHostState.showSnackbar(
-                                            message = "Could not delete file from device",
-                                            duration = SnackbarDuration.Long
-                                        )
-                                    }
-                                }
-                            }
-
-                            // Remove from app database if requested
-                            if (deleteFromApp) {
-                                downloadToDelete?.let { repository.delete(it) }
-                            }
-                        }
                         showDeleteDialog = false
                         downloadToDelete = null
+
+                        if (targetDownload != null) {
+                            scope.launch {
+                                // Delete from device if requested
+                                if (shouldDeleteFromDevice) {
+                                    targetDownload.filePath?.let { path ->
+                                        val success = try {
+                                            File(path).delete()
+                                        } catch (e: Exception) {
+                                            android.util.Log.w("DownloadsScreen", "Failed to delete file: $path", e)
+                                            false
+                                        }
+                                        if (!success) {
+                                            snackbarHostState.showSnackbar(
+                                                message = "Could not delete file from device",
+                                                duration = SnackbarDuration.Long
+                                            )
+                                        }
+                                    }
+                                }
+
+                                // Remove from app database if requested
+                                if (shouldDeleteFromApp) {
+                                    repository.delete(targetDownload)
+                                }
+                            }
+                        }
                     },
                     enabled = deleteFromApp || deleteFromDevice
                 ) {
