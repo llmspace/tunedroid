@@ -21,22 +21,6 @@ class PreferencesManager(private val context: Context) {
         private val DELETE_ORIGINAL = booleanPreferencesKey("delete_original")
         private val WIFI_ONLY = booleanPreferencesKey("wifi_only")
 
-        private const val MIGRATION_V4_DONE = "migration_v4_done"
-
-        /**
-         * One-time migration for v1.0.4:
-         * Resets AUTO_UPDATE_ENGINE to false for users upgrading from v1.0.2
-         * where the default was true and the stored value may persist.
-         */
-        suspend fun runMigrations(context: Context) {
-            val sharedPrefs = context.getSharedPreferences("tunedroid_prefs", Context.MODE_PRIVATE)
-            if (!sharedPrefs.getBoolean(MIGRATION_V4_DONE, false)) {
-                context.dataStore.edit { prefs ->
-                    prefs[AUTO_UPDATE_ENGINE] = false
-                }
-                sharedPrefs.edit().putBoolean(MIGRATION_V4_DONE, true).apply()
-            }
-        }
     }
 
     val storagePath: Flow<String> = context.dataStore.data.map { prefs ->
@@ -52,7 +36,7 @@ class PreferencesManager(private val context: Context) {
     }
 
     val autoUpdateEngine: Flow<Boolean> = context.dataStore.data.map { prefs ->
-        prefs[AUTO_UPDATE_ENGINE] ?: false
+        prefs[AUTO_UPDATE_ENGINE] ?: true
     }
 
     val deleteOriginal: Flow<Boolean> = context.dataStore.data.map { prefs ->

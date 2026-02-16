@@ -180,7 +180,8 @@ class DownloadService : Service() {
                 request.addOption("--audio-format", "mp3")
                 request.addOption("--audio-quality", "${preset.bitrate}k")
                 request.addOption("--embed-thumbnail")
-                request.addOption("--embed-metadata")
+                request.addOption("--add-metadata")
+                request.addOption("--no-post-overwrites")
             } else {
                 // Download best audio only, keep original format
                 request.addOption("-f", "bestaudio/best")
@@ -192,36 +193,50 @@ class DownloadService : Service() {
             Log.d(TAG, "Starting download for: ${download.title}")
 
             var isPostProcessing = false
+            var lastProgressTime = System.currentTimeMillis()
 
-            val response = YoutubeDL.getInstance().execute(
-                request, processId
-            ) { progress, etaInSeconds, line ->
-                if (isCancelled) {
-                    YoutubeDL.getInstance().destroyProcessById(processId)
-                    return@execute
-                }
+            val response = withContext(Dispatchers.IO) {
+                withTimeout(600_000) { // 10 minute timeout
+                    YoutubeDL.getInstance().execute(
+                        request, processId
+                    ) { progress, etaInSeconds, line ->
+                        if (isCancelled) {
+                            YoutubeDL.getInstance().destroyProcessById(processId)
+                            return@execute
+                        }
 
-                // Detect post-processing phase (conversion, embedding)
-                if (line?.contains("[ExtractAudio]") == true ||
-                    line?.contains("Post-process") == true ||
-                    line?.contains("[EmbedThumbnail]") == true ||
-                    line?.contains("[Metadata]") == true ||
-                    line?.contains("Deleting original file") == true) {
-                    isPostProcessing = true
-                }
+                        // Update last progress time whenever we receive any callback
+                        lastProgressTime = System.currentTimeMillis()
 
-                if (isPostProcessing) {
-                    // During post-processing, show indeterminate progress
-                    serviceScope.launch {
-                        repository.updateProgress(download.id, DownloadStatus.CONVERTING, 99f)
+                        // Log output lines for debugging
+                        if (line?.isNotBlank() == true) {
+                            Log.d(TAG, "yt-dlp: $line")
+                        }
+
+                        // Detect post-processing phase (conversion, embedding)
+                        if (line?.contains("[ExtractAudio]") == true ||
+                            line?.contains("Post-process") == true ||
+                            line?.contains("[EmbedThumbnail]") == true ||
+                            line?.contains("[Metadata]") == true ||
+                            line?.contains("Deleting original file") == true) {
+                            isPostProcessing = true
+                            Log.d(TAG, "Entered post-processing phase")
+                        }
+
+                        if (isPostProcessing) {
+                            // During post-processing, show indeterminate progress
+                            serviceScope.launch {
+                                repository.updateProgress(download.id, DownloadStatus.CONVERTING, 99f)
+                            }
+                            updateNotification("Converting...", download.title, 99)
+                        } else {
+                            val adjustedProgress = progress.coerceIn(0f, 100f)
+                            serviceScope.launch {
+                                repository.updateProgress(download.id, DownloadStatus.DOWNLOADING, adjustedProgress)
+                            }
+                            updateNotification("Downloading... ${adjustedProgress.toInt()}%", download.title, adjustedProgress.toInt())
+                        }
                     }
-                    updateNotification("Converting...", download.title, 99)
-                } else {
-                    val adjustedProgress = progress.coerceIn(0f, 100f)
-                    serviceScope.launch {
-                        repository.updateProgress(download.id, DownloadStatus.DOWNLOADING, adjustedProgress)
-                    }
-                    updateNotification("Downloading... ${adjustedProgress.toInt()}%", download.title, adjustedProgress.toInt())
                 }
             }
 
@@ -279,6 +294,18 @@ class DownloadService : Service() {
                 )
                 showFailedNotification(download.title)
             }
+        } catch (e: TimeoutCancellationException) {
+            Log.e(TAG, "Download timed out after 10 minutes", e)
+            currentProcessId?.let { pid ->
+                try {
+                    YoutubeDL.getInstance().destroyProcessById(pid)
+                } catch (_: Exception) {}
+            }
+            repository.updateStatusWithError(
+                download.id, DownloadStatus.FAILED,
+                "Download timed out. The extraction engine may be stuck. Try restarting the app."
+            )
+            showFailedNotification(download.title)
         } catch (e: Exception) {
             if (!isCancelled) {
                 val errorMsg = e.message ?: "Download failed"

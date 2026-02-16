@@ -2,6 +2,17 @@
 
 All notable changes to TuneDroid will be documented in this file.
 
+## [1.0.14] - 2026-02-16
+
+### Fixed
+- **Conversion hanging after engine update**: Added 10-minute timeout protection to prevent indefinite hangs during post-processing phase when extraction engine is updated
+- Improved yt-dlp metadata and post-processing options for more reliable conversions
+- Better error handling with user-friendly timeout message suggesting app restart
+
+### Changed
+- **Auto-update extraction engine now ON by default**: New users will automatically get engine updates; existing users can enable it in Settings
+- Enhanced logging of yt-dlp output for better debugging of download issues
+
 ## [1.0.13] - 2026-02-16
 
 ### Fixed
