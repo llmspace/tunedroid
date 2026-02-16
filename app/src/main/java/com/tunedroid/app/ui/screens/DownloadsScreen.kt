@@ -1,6 +1,14 @@
 package com.tunedroid.app.ui.screens
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -13,8 +21,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import com.tunedroid.app.data.database.DownloadEntity
 import com.tunedroid.app.data.database.DownloadStatus
@@ -34,6 +44,38 @@ fun DownloadsScreen() {
     val repository = remember { DownloadRepository(context) }
     val snackbarHostState = remember { SnackbarHostState() }
 
+    val readPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        Manifest.permission.READ_MEDIA_AUDIO
+    } else {
+        Manifest.permission.READ_EXTERNAL_STORAGE
+    }
+
+    var hasStoragePermission by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(context, readPermission) ==
+                PackageManager.PERMISSION_GRANTED
+        )
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        hasStoragePermission = isGranted
+        if (isGranted) {
+            scope.launch {
+                val recovered = withContext(Dispatchers.IO) {
+                    repository.recoverExistingFiles()
+                }
+                if (recovered > 0) {
+                    snackbarHostState.showSnackbar(
+                        message = "Recovered $recovered previously downloaded file${if (recovered != 1) "s" else ""}",
+                        duration = SnackbarDuration.Short
+                    )
+                }
+            }
+        }
+    }
+
     val allDownloads by repository.getAllDownloads().collectAsState(initial = emptyList())
 
     val activeDownloads = allDownloads.filter {
@@ -48,8 +90,9 @@ fun DownloadsScreen() {
     val completedDownloads = allDownloads.filter { it.status == DownloadStatus.COMPLETED }
 
     // Recover existing files after reinstall (DB empty but files exist on disk)
-    // Uses Unit key to run exactly once — recoverExistingFiles() has its own guard (getTotalCount > 0)
+    // Only attempt if we have storage read permission
     LaunchedEffect(Unit) {
+        if (!hasStoragePermission) return@LaunchedEffect
         val recovered = withContext(Dispatchers.IO) {
             repository.recoverExistingFiles()
         }
@@ -175,11 +218,51 @@ fun DownloadsScreen() {
                     .padding(innerPadding),
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = "No downloads yet",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                if (!hasStoragePermission) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.padding(horizontal = 32.dp)
+                    ) {
+                        Text(
+                            text = "Storage permission needed",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "TuneDroid needs permission to find your previously downloaded audio files.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Button(onClick = {
+                            val activity = context as? ComponentActivity
+                            val prefs = context.getSharedPreferences("tunedroid_prefs", 0)
+                            val alreadyRequested = prefs.getBoolean("storage_permission_requested", false)
+                            if (alreadyRequested && activity != null &&
+                                !activity.shouldShowRequestPermissionRationale(readPermission)
+                            ) {
+                                // Permanently denied — open app settings
+                                val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                    data = Uri.fromParts("package", context.packageName, null)
+                                }
+                                context.startActivity(intent)
+                            } else {
+                                prefs.edit().putBoolean("storage_permission_requested", true).apply()
+                                permissionLauncher.launch(readPermission)
+                            }
+                        }) {
+                            Text("Grant Permission")
+                        }
+                    }
+                } else {
+                    Text(
+                        text = "No downloads yet",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         } else {
             LazyColumn(

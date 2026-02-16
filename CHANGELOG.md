@@ -2,6 +2,22 @@
 
 All notable changes to TuneDroid will be documented in this file.
 
+## [1.0.5] - 2026-02-16
+
+### Fixed
+- **Download recovery after reinstall/update**: Previously downloaded files now correctly reappear after reinstalling or updating the app
+- Added storage read permissions (READ_EXTERNAL_STORAGE for Android 9-12, READ_MEDIA_AUDIO for Android 13+) so the app can rediscover audio files in the TuneDroid folder
+- Recovery now triggers at app startup instead of only when visiting the Downloads tab
+
+### Improved
+- Downloads screen shows a clear permission prompt if storage access is needed for file recovery
+- Handles permanently denied permission by directing users to app settings
+
+### Technical
+- Added READ_EXTERNAL_STORAGE (maxSdkVersion 32) and READ_MEDIA_AUDIO permissions to manifest
+- Early recovery logic in TuneDroidNavHost with runtime permission request
+- DownloadsScreen permission-aware fallback UI with SharedPreferences tracking for denial state
+
 ## [1.0.4] - 2026-02-15
 
 ### Improved

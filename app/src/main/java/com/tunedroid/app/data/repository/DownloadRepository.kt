@@ -73,6 +73,10 @@ class DownloadRepository(context: Context) {
         return dao.getActiveCount()
     }
 
+    suspend fun getTotalCount(): Int {
+        return dao.getTotalCount()
+    }
+
     suspend fun findOrphanedFiles(): List<File> {
         val storageDir = File(prefsManager.storagePath.first())
         if (!storageDir.exists()) return emptyList()
