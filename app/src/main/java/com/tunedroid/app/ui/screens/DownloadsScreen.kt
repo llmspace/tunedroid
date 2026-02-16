@@ -597,13 +597,34 @@ private fun getShareableUri(context: android.content.Context, filePath: String):
 }
 
 /**
- * Delete a file — uses MediaStore on API 29+, direct File.delete() on older.
- * For files not yet indexed by MediaStore, triggers a scan first then retries.
+ * Delete a file from the device using multiple strategies.
+ * Tries direct File.delete() first (works when app created the file),
+ * then falls back to MediaStore delete on API 29+.
  */
 private fun deleteFileFromDevice(context: android.content.Context, filePath: String): Boolean {
     val file = File(filePath)
 
-    // Try MediaStore on API 29+ (scoped storage)
+    // Strategy 1: Direct file delete — works when the app created the file in the
+    // same install session, or on API 28 and below with WRITE_EXTERNAL_STORAGE
+    if (file.exists()) {
+        try {
+            if (file.delete()) {
+                Log.d("DownloadsScreen", "File.delete() succeeded: $filePath")
+                // Also remove from MediaStore so it doesn't show as stale
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    val uri = getMediaStoreUri(context.contentResolver, filePath)
+                    if (uri != null) {
+                        try { context.contentResolver.delete(uri, null, null) } catch (_: Exception) {}
+                    }
+                }
+                return true
+            }
+        } catch (e: Exception) {
+            Log.w("DownloadsScreen", "File.delete() failed, trying MediaStore: $filePath", e)
+        }
+    }
+
+    // Strategy 2: MediaStore delete on API 29+ (for files the app doesn't own directly)
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
         var uri = getMediaStoreUri(context.contentResolver, filePath)
 
@@ -620,22 +641,25 @@ private fun deleteFileFromDevice(context: android.content.Context, filePath: Str
         }
 
         if (uri != null) {
-            return try {
-                context.contentResolver.delete(uri, null, null) > 0
+            try {
+                val deleted = context.contentResolver.delete(uri, null, null) > 0
+                if (deleted) {
+                    Log.d("DownloadsScreen", "MediaStore delete succeeded: $filePath")
+                    return true
+                }
+            } catch (e: SecurityException) {
+                Log.w("DownloadsScreen", "MediaStore SecurityException (no ownership): $filePath", e)
             } catch (e: Exception) {
                 Log.w("DownloadsScreen", "MediaStore delete failed: $filePath", e)
-                false
             }
         }
     }
 
-    // Direct delete for API 28 and below, or if MediaStore didn't find the file
-    return try {
-        file.delete()
-    } catch (e: Exception) {
-        Log.w("DownloadsScreen", "File.delete() failed: $filePath", e)
-        false
-    }
+    // Check if file is actually gone (might have been deleted by one of the strategies above)
+    if (!file.exists()) return true
+
+    Log.w("DownloadsScreen", "All delete strategies failed for: $filePath")
+    return false
 }
 
 private fun formatFileSize(bytes: Long): String {

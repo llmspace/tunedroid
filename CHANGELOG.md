@@ -2,6 +2,19 @@
 
 All notable changes to TuneDroid will be documented in this file.
 
+## [1.0.9] - 2026-02-16
+
+### Fixed
+- **Delete file from device now works**: File deletion tries direct File.delete() first (works for app-created files), then falls back to MediaStore delete — covers all Android versions
+- Added `requestLegacyExternalStorage` for API 29 compatibility with direct file operations
+- Extended WRITE_EXTERNAL_STORAGE to API 29 for full file management on Android 10
+- After direct file delete, also cleans up stale MediaStore entry
+
+### Technical
+- Reversed delete strategy order: File.delete() first, MediaStore second — fixes ownership issue where MediaStore found the URI but couldn't delete files the app didn't "own"
+- Added logging for each delete strategy to aid debugging
+- Final existence check after all strategies as safety net
+
 ## [1.0.8] - 2026-02-16
 
 ### Fixed
