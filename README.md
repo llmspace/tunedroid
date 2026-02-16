@@ -18,13 +18,12 @@ Android "audio-from-video-url" extraction app.
 - **Target SDK**: 35 (Android 15)
 - **Language**: Kotlin 2.1.0
 - **UI Framework**: Jetpack Compose
-- **Audio Extraction**: youtubedl-android (junkfood02 fork) + FFmpeg
+- **Audio Extraction**: (junkfood02 fork) + FFmpeg
 - **Database**: Room 2.6.1
 - **Navigation**: Jetpack Navigation Compose
 
 ## Key Dependencies
-- `io.github.junkfood02.youtubedl-android:library:0.17.2`
-- `io.github.junkfood02.youtubedl-android:ffmpeg:0.17.2`
+(junkfood02 fork) + FFmpeg
 - Room, WorkManager, Coil, DataStore
 
 ## Build Instructions
