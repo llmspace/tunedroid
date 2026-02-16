@@ -363,6 +363,11 @@ fun DownloadsScreen() {
                         download = download,
                         onRetry = {
                             DownloadService.retry(context, download.id)
+                        },
+                        onDelete = {
+                            scope.launch {
+                                repository.delete(download)
+                            }
                         }
                     )
                 }
@@ -491,7 +496,7 @@ private fun ActiveDownloadItem(download: DownloadEntity, onAbort: () -> Unit) {
 }
 
 @Composable
-private fun FailedDownloadItem(download: DownloadEntity, onRetry: () -> Unit) {
+private fun FailedDownloadItem(download: DownloadEntity, onRetry: () -> Unit, onDelete: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
@@ -524,6 +529,14 @@ private fun FailedDownloadItem(download: DownloadEntity, onRetry: () -> Unit) {
                     Icons.Default.Refresh,
                     contentDescription = "Retry",
                     tint = MaterialTheme.colorScheme.primary
+                )
+            }
+
+            IconButton(onClick = onDelete) {
+                Icon(
+                    Icons.Default.Delete,
+                    contentDescription = "Remove",
+                    tint = MaterialTheme.colorScheme.error
                 )
             }
         }

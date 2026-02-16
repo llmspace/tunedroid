@@ -424,6 +424,23 @@ class DownloadService : Service() {
             }
         }
         serviceScope.launch {
+            // Get download info before updating status
+            val download = repository.getById(downloadId)
+
+            // Clean up any orphaned files from the cancelled download
+            if (download != null) {
+                val storagePath = prefsManager.storagePath.first()
+                val baseName = download.title
+                    .replace(Regex("[^a-zA-Z0-9\\s\\-_]"), "")
+                    .trim()
+                    .replace(Regex("\\s+"), "_")
+                cleanupFiles(storagePath, baseName)
+
+                // Also try to clean up by URL hash (in case title changed)
+                val urlHash = download.url.hashCode().toString()
+                cleanupFiles(storagePath, urlHash)
+            }
+
             repository.updateStatusWithError(
                 downloadId, DownloadStatus.CANCELLED, "Download cancelled"
             )

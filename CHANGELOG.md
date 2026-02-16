@@ -2,6 +2,16 @@
 
 All notable changes to TuneDroid will be documented in this file.
 
+## [1.0.15] - 2026-02-16
+
+### Added
+- **Delete button for failed downloads**: Failed downloads in Library now show a Delete button alongside Retry, allowing users to clear unwanted failed items without retrying
+- **Enhanced cleanup on download cancellation**: Cancelling an active download now thoroughly cleans up all orphaned partial files and temporary data
+
+### Improved
+- Cancel button for active downloads now removes all intermediate files (`.part`, `.temp`, `.ytdl` extensions)
+- Orphaned file cleanup uses both title-based and URL hash-based matching for more thorough removal
+
 ## [1.0.14] - 2026-02-16
 
 ### Fixed
