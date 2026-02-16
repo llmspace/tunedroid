@@ -2,6 +2,18 @@
 
 All notable changes to TuneDroid will be documented in this file.
 
+## [1.0.16] - 2026-02-16
+
+### Fixed
+- **In-app update installer now launches reliably on first attempt**: Added longer delays, file verification, and better error handling to prevent installer from silently failing to open (especially on MIUI/restrictive ROMs)
+- Installer launch now waits for file system sync and verifies APK exists before attempting installation
+- Added detailed logging to diagnose installer launch issues
+
+### Improved
+- Increased delays before and after installer launch to ensure proper timing on slower devices
+- Added verification that package installer app exists before attempting launch
+- Better error messages if installer fails to launch
+
 ## [1.0.15] - 2026-02-16
 
 ### Added

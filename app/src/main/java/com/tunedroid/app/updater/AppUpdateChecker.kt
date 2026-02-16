@@ -182,14 +182,26 @@ object AppUpdateChecker {
                 file
             }
 
+            // Ensure file is fully written and closed before attempting install
+            withContext(Dispatchers.IO) {
+                // Force another sync and verify file exists
+                if (!apkFile.exists() || apkFile.length() == 0L) {
+                    throw Exception("APK file not found or empty after download")
+                }
+                Log.d(TAG, "APK ready: ${apkFile.absolutePath}, size: ${apkFile.length()} bytes")
+            }
+
             // Switch to Main thread for install — MIUI blocks startActivity from background
             withContext(Dispatchers.Main) {
                 onStateChange(UpdateDownloadState.Installing)
 
-                // Small delay to ensure UI updates before launching installer
-                kotlinx.coroutines.delay(200)
+                // Longer delay to ensure file system is fully synced and UI is ready
+                kotlinx.coroutines.delay(500)
 
                 installApk(context, apkFile)
+
+                // Give installer more time to launch before showing "Done"
+                kotlinx.coroutines.delay(1000)
                 onStateChange(UpdateDownloadState.Done)
             }
 
@@ -202,30 +214,47 @@ object AppUpdateChecker {
     }
 
     private fun installApk(context: Context, apkFile: File) {
-        val uri = FileProvider.getUriForFile(
-            context,
-            "${context.packageName}.fileprovider",
-            apkFile
-        )
-
-        val intent = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(uri, "application/vnd.android.package-archive")
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-
-        // Grant URI permission explicitly to all potential handlers (MIUI workaround)
-        val resolvedActivities = context.packageManager.queryIntentActivities(intent, 0)
-        for (resolvedInfo in resolvedActivities) {
-            context.grantUriPermission(
-                resolvedInfo.activityInfo.packageName,
-                uri,
-                Intent.FLAG_GRANT_READ_URI_PERMISSION
+        try {
+            val uri = FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.fileprovider",
+                apkFile
             )
-        }
 
-        Log.d(TAG, "Launching APK installer for: ${apkFile.absolutePath} (${apkFile.length()} bytes)")
-        context.startActivity(intent)
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, "application/vnd.android.package-archive")
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            }
+
+            // Verify that there's an app that can handle this intent
+            val resolvedActivities = context.packageManager.queryIntentActivities(intent, 0)
+            if (resolvedActivities.isEmpty()) {
+                Log.e(TAG, "No installer app found to handle APK installation")
+                throw Exception("No installer app found")
+            }
+
+            // Grant URI permission explicitly to all potential handlers (MIUI workaround)
+            for (resolvedInfo in resolvedActivities) {
+                context.grantUriPermission(
+                    resolvedInfo.activityInfo.packageName,
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+                Log.d(TAG, "Granted URI permission to: ${resolvedInfo.activityInfo.packageName}")
+            }
+
+            Log.d(TAG, "Launching APK installer for: ${apkFile.absolutePath} (${apkFile.length()} bytes)")
+            Log.d(TAG, "Found ${resolvedActivities.size} installer(s): ${resolvedActivities.joinToString { it.activityInfo.packageName }}")
+
+            context.startActivity(intent)
+
+            Log.d(TAG, "startActivity() returned successfully")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to launch installer", e)
+            throw e
+        }
     }
 
     private fun compareVersions(v1: String, v2: String): Int {
