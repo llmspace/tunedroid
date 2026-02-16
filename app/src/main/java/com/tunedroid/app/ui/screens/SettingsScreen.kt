@@ -15,16 +15,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.tunedroid.app.BuildConfig
 import com.tunedroid.app.data.PreferencesManager
 import com.tunedroid.app.data.repository.DownloadRepository
 import com.tunedroid.app.engine.EngineUpdater
 import com.tunedroid.app.updater.AppUpdateChecker
-import com.tunedroid.app.util.StoragePermissionHelper
+import com.tunedroid.app.updater.UpdateDownloadState
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -44,6 +42,7 @@ fun SettingsScreen(onNavigateBack: () -> Unit) {
 
     var engineVersion by remember { mutableStateOf("Loading...") }
     var isCheckingUpdate by remember { mutableStateOf(false) }
+    var updateDownloadState by remember { mutableStateOf<UpdateDownloadState>(UpdateDownloadState.Idle) }
     var showCleanupDialog by remember { mutableStateOf(false) }
     var cleanupDialogMessage by remember { mutableStateOf("") }
     var isScanning by remember { mutableStateOf(false) }
@@ -122,7 +121,14 @@ fun SettingsScreen(onNavigateBack: () -> Unit) {
                                 val appUpdate = AppUpdateChecker.check(context)
                                 if (appUpdate != null && appUpdate.isNewer) {
                                     withContext(Dispatchers.Main) {
-                                        AppUpdateChecker.showUpdateDialog(context, appUpdate)
+                                        AppUpdateChecker.showUpdateDialogWithProgress(
+                                            context = context,
+                                            update = appUpdate,
+                                            onStateChange = { state -> updateDownloadState = state },
+                                            onStartDownload = { downloadAction ->
+                                                scope.launch { downloadAction() }
+                                            }
+                                        )
                                     }
                                 } else {
                                     val result = EngineUpdater.update(context)
@@ -143,7 +149,7 @@ fun SettingsScreen(onNavigateBack: () -> Unit) {
                             }
                         }
                     },
-                    enabled = !isCheckingUpdate
+                    enabled = !isCheckingUpdate && updateDownloadState is UpdateDownloadState.Idle
                 ) {
                     if (isCheckingUpdate) {
                         CircularProgressIndicator(
@@ -154,6 +160,91 @@ fun SettingsScreen(onNavigateBack: () -> Unit) {
                     }
                     Text("Check for updates", style = MaterialTheme.typography.labelMedium)
                 }
+            }
+
+            // Update download progress bar
+            when (val state = updateDownloadState) {
+                is UpdateDownloadState.Downloading -> {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp)
+                    ) {
+                        LinearProgressIndicator(
+                            progress = { state.progress },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(4.dp),
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "Downloading update... ${(state.progress * 100).toInt()}%",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                is UpdateDownloadState.Installing -> {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp)
+                    ) {
+                        LinearProgressIndicator(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(4.dp),
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "Installing...",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                is UpdateDownloadState.Done -> {
+                    LaunchedEffect(Unit) {
+                        delay(3000)
+                        updateDownloadState = UpdateDownloadState.Idle
+                    }
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp)
+                    ) {
+                        LinearProgressIndicator(
+                            progress = { 1f },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(4.dp),
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "Update ready — installer opened",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+                is UpdateDownloadState.Failed -> {
+                    LaunchedEffect(Unit) {
+                        delay(5000)
+                        updateDownloadState = UpdateDownloadState.Idle
+                    }
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            text = "Update failed: ${state.message}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
+                is UpdateDownloadState.Idle -> { /* nothing */ }
             }
 
             HorizontalDivider()
@@ -207,38 +298,6 @@ fun SettingsScreen(onNavigateBack: () -> Unit) {
                     scope.launch { prefsManager.setWifiOnly(it) }
                 }
             )
-
-            // File management access (API 30+ only — needed for MIUI and other restrictive ROMs)
-            if (StoragePermissionHelper.isAllFilesAccessRelevant()) {
-                HorizontalDivider()
-
-                var hasAllFilesAccess by remember {
-                    mutableStateOf(StoragePermissionHelper.hasAllFilesAccess())
-                }
-
-                val lifecycleOwner = LocalLifecycleOwner.current
-                DisposableEffect(lifecycleOwner) {
-                    val observer = LifecycleEventObserver { _, event ->
-                        if (event == Lifecycle.Event.ON_RESUME) {
-                            hasAllFilesAccess = StoragePermissionHelper.hasAllFilesAccess()
-                        }
-                    }
-                    lifecycleOwner.lifecycle.addObserver(observer)
-                    onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
-                }
-
-                SettingsItem(
-                    title = "File management access",
-                    subtitle = if (hasAllFilesAccess) "Granted" else "Required for deleting files on some devices",
-                    onClick = {
-                        if (!hasAllFilesAccess) {
-                            context.startActivity(
-                                StoragePermissionHelper.createAllFilesAccessIntent(context)
-                            )
-                        }
-                    }
-                )
-            }
 
             HorizontalDivider()
 

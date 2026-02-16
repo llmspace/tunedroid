@@ -2,6 +2,18 @@
 
 All notable changes to TuneDroid will be documented in this file.
 
+## [1.0.11] - 2026-02-16
+
+### Fixed
+- **Narrowed file permissions**: Removed broad `MANAGE_EXTERNAL_STORAGE` permission — file deletion on restrictive ROMs (MIUI, etc.) now uses Android's per-file `createDeleteRequest()` system dialog instead, which requires no extra permissions
+- **Delete dialog UX**: Checking "Delete file from device" now auto-checks "Remove from app list" (can't uncheck it while device-delete is selected)
+
+### Added
+- **Update download progress bar**: "Check for updates" in Settings now shows a slim animated progress bar with status text (downloading % → installing → done) instead of just a Toast
+
+### Removed
+- Removed `StoragePermissionHelper` utility and "File management access" from Settings — no longer needed since broad file access permission was removed
+
 ## [1.0.10] - 2026-02-16
 
 ### Fixed

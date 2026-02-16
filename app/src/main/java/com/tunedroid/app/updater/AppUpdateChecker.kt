@@ -1,20 +1,15 @@
 package com.tunedroid.app.updater
 
 import android.app.AlertDialog
-import android.app.DownloadManager
-import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
-import android.net.Uri
-import android.os.Build
 import android.util.Log
-import android.widget.Toast
 import androidx.core.content.FileProvider
 import com.tunedroid.app.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
 
@@ -24,14 +19,21 @@ data class AppUpdate(
     val isNewer: Boolean
 )
 
+/** Progress state for the update download UI. */
+sealed class UpdateDownloadState {
+    data object Idle : UpdateDownloadState()
+    data class Downloading(val progress: Float) : UpdateDownloadState() // 0f..1f
+    data object Installing : UpdateDownloadState()
+    data object Done : UpdateDownloadState()
+    data class Failed(val message: String) : UpdateDownloadState()
+}
+
 object AppUpdateChecker {
 
     private const val TAG = "TuneDroid"
 
     private const val RELEASES_API_URL =
         "https://api.github.com/repos/llmspace/tunedroid-releases/releases/latest"
-
-    private var currentDownloadId: Long = -1L
 
     suspend fun check(context: Context): AppUpdate? = withContext(Dispatchers.IO) {
         try {
@@ -89,78 +91,102 @@ object AppUpdateChecker {
             .setTitle("Update Available")
             .setMessage("A new version of TuneDroid (${update.versionTag}) is available. Update now?")
             .setPositiveButton("Update") { _, _ ->
-                downloadAndInstallApk(context, update.downloadUrl, update.versionTag)
+                // No-op — caller should use downloadAndInstall with progress callback instead
             }
             .setNegativeButton("Later", null)
             .show()
     }
 
-    private fun downloadAndInstallApk(context: Context, url: String, versionTag: String) {
-        try {
-            val apkFile = File(context.externalCacheDir, "tunedroid-update.apk")
-            if (apkFile.exists()) apkFile.delete()
+    /**
+     * Show update dialog that triggers a download with progress reporting.
+     * The onStateChange callback is invoked on the main thread.
+     */
+    fun showUpdateDialogWithProgress(
+        context: Context,
+        update: AppUpdate,
+        onStateChange: (UpdateDownloadState) -> Unit,
+        onStartDownload: (suspend () -> Unit) -> Unit
+    ) {
+        if (!update.isNewer) return
 
-            val request = DownloadManager.Request(Uri.parse(url)).apply {
-                setTitle("TuneDroid Update")
-                setDescription("Downloading $versionTag...")
-                setDestinationUri(Uri.fromFile(apkFile))
-                setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                setMimeType("application/vnd.android.package-archive")
-            }
-
-            val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-            currentDownloadId = dm.enqueue(request)
-
-            Toast.makeText(context, "Downloading update...", Toast.LENGTH_SHORT).show()
-
-            val receiver = object : BroadcastReceiver() {
-                override fun onReceive(ctx: Context, intent: Intent) {
-                    val id = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1)
-                    if (id != currentDownloadId) return
-
-                    try {
-                        ctx.applicationContext.unregisterReceiver(this)
-                    } catch (_: Exception) { }
-                    handleDownloadComplete(ctx, dm, id, apkFile)
+        AlertDialog.Builder(context)
+            .setTitle("Update Available")
+            .setMessage("A new version of TuneDroid (${update.versionTag}) is available. Update now?")
+            .setPositiveButton("Update") { _, _ ->
+                onStartDownload {
+                    downloadAndInstall(context, update.downloadUrl, onStateChange)
                 }
             }
+            .setNegativeButton("Later", null)
+            .show()
+    }
 
-            val filter = IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                context.applicationContext.registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED)
-            } else {
-                @Suppress("UnspecifiedRegisterReceiverFlag")
-                context.applicationContext.registerReceiver(receiver, filter)
+    /**
+     * Download APK with progress and install.
+     * Must be called from a coroutine scope — runs download on IO dispatcher.
+     */
+    suspend fun downloadAndInstall(
+        context: Context,
+        url: String,
+        onStateChange: (UpdateDownloadState) -> Unit
+    ) {
+        try {
+            withContext(Dispatchers.Main) {
+                onStateChange(UpdateDownloadState.Downloading(0f))
+            }
+
+            val apkFile = withContext(Dispatchers.IO) {
+                val file = File(context.externalCacheDir, "tunedroid-update.apk")
+                if (file.exists()) file.delete()
+
+                val connection = URL(url).openConnection() as HttpURLConnection
+                connection.requestMethod = "GET"
+                connection.connectTimeout = 15000
+                connection.readTimeout = 30000
+                connection.connect()
+
+                if (connection.responseCode != 200) {
+                    throw Exception("HTTP ${connection.responseCode}")
+                }
+
+                val totalBytes = connection.contentLength.toLong()
+                var downloadedBytes = 0L
+
+                connection.inputStream.use { input ->
+                    FileOutputStream(file).use { output ->
+                        val buffer = ByteArray(8192)
+                        var bytesRead: Int
+                        while (input.read(buffer).also { bytesRead = it } != -1) {
+                            output.write(buffer, 0, bytesRead)
+                            downloadedBytes += bytesRead
+                            if (totalBytes > 0) {
+                                val progress = (downloadedBytes.toFloat() / totalBytes).coerceIn(0f, 1f)
+                                withContext(Dispatchers.Main) {
+                                    onStateChange(UpdateDownloadState.Downloading(progress))
+                                }
+                            }
+                        }
+                    }
+                }
+                connection.disconnect()
+                file
+            }
+
+            withContext(Dispatchers.Main) {
+                onStateChange(UpdateDownloadState.Installing)
+            }
+
+            installApk(context, apkFile)
+
+            withContext(Dispatchers.Main) {
+                onStateChange(UpdateDownloadState.Done)
             }
 
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to start APK download", e)
-            Toast.makeText(context, "Download failed: ${e.message}", Toast.LENGTH_LONG).show()
-        }
-    }
-
-    private fun handleDownloadComplete(
-        context: Context,
-        dm: DownloadManager,
-        downloadId: Long,
-        apkFile: File
-    ) {
-        val query = DownloadManager.Query().setFilterById(downloadId)
-        val cursor = dm.query(query)
-
-        if (cursor != null && cursor.moveToFirst()) {
-            val statusIndex = cursor.getColumnIndex(DownloadManager.COLUMN_STATUS)
-            val status = cursor.getInt(statusIndex)
-
-            if (status == DownloadManager.STATUS_SUCCESSFUL) {
-                installApk(context, apkFile)
-            } else {
-                val reasonIndex = cursor.getColumnIndex(DownloadManager.COLUMN_REASON)
-                val reason = cursor.getInt(reasonIndex)
-                Log.e(TAG, "APK download failed. Status: $status, Reason: $reason")
-                Toast.makeText(context, "Download failed. Please try again.", Toast.LENGTH_LONG).show()
+            Log.e(TAG, "Update download failed", e)
+            withContext(Dispatchers.Main) {
+                onStateChange(UpdateDownloadState.Failed(e.message ?: "Unknown error"))
             }
-            cursor.close()
         }
     }
 
@@ -181,7 +207,7 @@ object AppUpdateChecker {
             context.startActivity(intent)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to launch APK installer", e)
-            Toast.makeText(context, "Could not open installer: ${e.message}", Toast.LENGTH_LONG).show()
+            throw e
         }
     }
 

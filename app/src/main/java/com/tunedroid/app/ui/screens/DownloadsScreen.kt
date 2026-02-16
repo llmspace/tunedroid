@@ -12,6 +12,7 @@ import android.provider.Settings
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -30,7 +31,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
-import com.tunedroid.app.util.StoragePermissionHelper
 import com.tunedroid.app.data.database.DownloadEntity
 import com.tunedroid.app.data.database.DownloadStatus
 import com.tunedroid.app.data.repository.DownloadRepository
@@ -112,24 +112,24 @@ fun DownloadsScreen() {
     var showDeleteDialog by remember { mutableStateOf(false) }
     var downloadToDelete by remember { mutableStateOf<DownloadEntity?>(null) }
 
-    // All Files Access permission state for file deletion on API 30+ (MIUI etc.)
-    var showAllFilesAccessDialog by remember { mutableStateOf(false) }
-    var pendingDeleteAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+    // For MediaStore.createDeleteRequest() on API 30+ (MIUI/scoped storage)
+    var pendingDeleteAppAction by remember { mutableStateOf<(() -> Unit)?>(null) }
 
-    val allFilesAccessLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) {
-        if (StoragePermissionHelper.hasAllFilesAccess()) {
-            pendingDeleteAction?.invoke()
+    val mediaStoreDeleteLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
+            // User approved deletion via system dialog — also remove from app DB
+            pendingDeleteAppAction?.invoke()
         } else {
             scope.launch {
                 snackbarHostState.showSnackbar(
-                    message = "File management permission is required to delete files from device",
-                    duration = SnackbarDuration.Long
+                    message = "File deletion was cancelled",
+                    duration = SnackbarDuration.Short
                 )
             }
         }
-        pendingDeleteAction = null
+        pendingDeleteAppAction = null
     }
 
     if (showDeleteDialog && downloadToDelete != null) {
@@ -153,11 +153,19 @@ fun DownloadsScreen() {
                     ) {
                         Checkbox(
                             checked = deleteFromApp,
-                            onCheckedChange = { deleteFromApp = it }
+                            onCheckedChange = {
+                                // Can't uncheck if "Delete from device" is checked
+                                if (!deleteFromDevice) deleteFromApp = it
+                            },
+                            enabled = !deleteFromDevice
                         )
                         Text(
                             text = "Remove from app list",
-                            modifier = Modifier.padding(start = 8.dp)
+                            modifier = Modifier.padding(start = 8.dp),
+                            color = if (deleteFromDevice)
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            else
+                                MaterialTheme.colorScheme.onSurface
                         )
                     }
 
@@ -167,20 +175,15 @@ fun DownloadsScreen() {
                     ) {
                         Checkbox(
                             checked = deleteFromDevice,
-                            onCheckedChange = { deleteFromDevice = it }
+                            onCheckedChange = {
+                                deleteFromDevice = it
+                                // Auto-check "Remove from app list" when deleting from device
+                                if (it) deleteFromApp = true
+                            }
                         )
                         Text(
                             text = "Delete file from device",
                             modifier = Modifier.padding(start = 8.dp)
-                        )
-                    }
-
-                    if (deleteFromDevice && !deleteFromApp) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "Note: File will be deleted but entry will remain in app.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
@@ -197,14 +200,49 @@ fun DownloadsScreen() {
                         downloadToDelete = null
 
                         if (targetDownload != null) {
-                            val executeDelete: () -> Unit = {
-                                scope.launch {
-                                    if (shouldDeleteFromDevice) {
-                                        targetDownload.filePath?.let { path ->
-                                            val success = withContext(Dispatchers.IO) {
-                                                deleteFileFromDevice(context, path)
-                                            }
-                                            if (!success) {
+                            scope.launch {
+                                if (shouldDeleteFromDevice) {
+                                    targetDownload.filePath?.let { path ->
+                                        val directSuccess = withContext(Dispatchers.IO) {
+                                            deleteFileFromDevice(context, path)
+                                        }
+                                        if (!directSuccess) {
+                                            // File.delete() and MediaStore delete failed —
+                                            // try system delete dialog on API 30+ (MIUI etc.)
+                                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                                                val uri = withContext(Dispatchers.IO) {
+                                                    getMediaStoreUriForDelete(context, path)
+                                                }
+                                                if (uri != null) {
+                                                    try {
+                                                        val deleteRequest = MediaStore.createDeleteRequest(
+                                                            context.contentResolver,
+                                                            listOf(uri)
+                                                        )
+                                                        // Store the app-list removal as pending
+                                                        if (shouldDeleteFromApp) {
+                                                            pendingDeleteAppAction = {
+                                                                scope.launch { repository.delete(targetDownload) }
+                                                            }
+                                                        }
+                                                        mediaStoreDeleteLauncher.launch(
+                                                            IntentSenderRequest.Builder(deleteRequest.intentSender).build()
+                                                        )
+                                                        return@launch // Don't remove from app yet — wait for result
+                                                    } catch (e: Exception) {
+                                                        Log.w("DownloadsScreen", "createDeleteRequest failed", e)
+                                                        snackbarHostState.showSnackbar(
+                                                            message = "Could not delete file from device",
+                                                            duration = SnackbarDuration.Long
+                                                        )
+                                                    }
+                                                } else {
+                                                    snackbarHostState.showSnackbar(
+                                                        message = "Could not delete file from device",
+                                                        duration = SnackbarDuration.Long
+                                                    )
+                                                }
+                                            } else {
                                                 snackbarHostState.showSnackbar(
                                                     message = "Could not delete file from device",
                                                     duration = SnackbarDuration.Long
@@ -212,21 +250,10 @@ fun DownloadsScreen() {
                                             }
                                         }
                                     }
-                                    if (shouldDeleteFromApp) {
-                                        repository.delete(targetDownload)
-                                    }
                                 }
-                            }
-
-                            // Check if All Files Access is needed for device deletion
-                            if (shouldDeleteFromDevice &&
-                                StoragePermissionHelper.isAllFilesAccessRelevant() &&
-                                !StoragePermissionHelper.hasAllFilesAccess()
-                            ) {
-                                pendingDeleteAction = executeDelete
-                                showAllFilesAccessDialog = true
-                            } else {
-                                executeDelete()
+                                if (shouldDeleteFromApp) {
+                                    repository.delete(targetDownload)
+                                }
                             }
                         }
                     },
@@ -239,41 +266,6 @@ fun DownloadsScreen() {
                 TextButton(onClick = {
                     showDeleteDialog = false
                     downloadToDelete = null
-                }) {
-                    Text("Cancel")
-                }
-            }
-        )
-    }
-
-    // All Files Access permission dialog
-    if (showAllFilesAccessDialog) {
-        AlertDialog(
-            onDismissRequest = {
-                showAllFilesAccessDialog = false
-                pendingDeleteAction = null
-            },
-            title = { Text("File Access Required") },
-            text = {
-                Text(
-                    "To delete downloaded files from your device, TuneDroid needs " +
-                    "the \"All Files Access\" permission. This will open your device settings."
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    showAllFilesAccessDialog = false
-                    allFilesAccessLauncher.launch(
-                        StoragePermissionHelper.createAllFilesAccessIntent(context)
-                    )
-                }) {
-                    Text("Open Settings")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = {
-                    showAllFilesAccessDialog = false
-                    pendingDeleteAction = null
                 }) {
                     Text("Cancel")
                 }
@@ -726,6 +718,37 @@ private fun deleteFileFromDevice(context: android.content.Context, filePath: Str
 
     Log.w("DownloadsScreen", "All delete strategies failed for: $filePath")
     return false
+}
+
+/**
+ * Get a MediaStore content URI for a file, specifically for use with
+ * MediaStore.createDeleteRequest() on API 30+. Scans the file into
+ * MediaStore if it's not already indexed.
+ */
+private fun getMediaStoreUriForDelete(context: android.content.Context, filePath: String): Uri? {
+    val file = File(filePath)
+    if (!file.exists()) return null
+
+    // Try MediaStore lookup first
+    var uri = getMediaStoreUri(context.contentResolver, filePath)
+
+    // If not in MediaStore, scan it in and retry
+    if (uri == null) {
+        val latch = java.util.concurrent.CountDownLatch(1)
+        android.media.MediaScannerConnection.scanFile(
+            context,
+            arrayOf(filePath),
+            arrayOf("audio/*")
+        ) { _, scannedUri ->
+            if (scannedUri != null) uri = scannedUri
+            latch.countDown()
+        }
+        latch.await(3, java.util.concurrent.TimeUnit.SECONDS)
+        if (uri == null) {
+            uri = getMediaStoreUri(context.contentResolver, filePath)
+        }
+    }
+    return uri
 }
 
 private fun formatFileSize(bytes: Long): String {
