@@ -2,6 +2,20 @@
 
 All notable changes to TuneDroid will be documented in this file.
 
+## [1.0.8] - 2026-02-16
+
+### Fixed
+- **Play button not working**: Tapping play on completed downloads now opens music apps correctly — uses MediaStore content URIs on Android 10+ instead of direct file paths
+- **Share button not working**: Share now correctly sends audio files to other apps via MediaStore URIs
+- **"Could not delete file from device"**: Delete from device now works on Android 10+ by using MediaStore delete instead of direct File.delete()
+- Files not in MediaStore are automatically scanned in before play/share/delete operations
+
+### Technical
+- Added MediaStore-based URI resolution for play, share, and delete on API 29+ (scoped storage)
+- DownloadService now triggers MediaScannerConnection.scanFile() after successful download so files are immediately available in MediaStore
+- Fallback to FileProvider for devices below API 29
+- Error messages now shown via Snackbar instead of being silently swallowed
+
 ## [1.0.7] - 2026-02-16
 
 ### Changed

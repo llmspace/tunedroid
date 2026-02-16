@@ -3,6 +3,7 @@ package com.tunedroid.app.service
 import android.app.*
 import android.content.Context
 import android.content.Intent
+import android.media.MediaScannerConnection
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.IBinder
@@ -256,6 +257,14 @@ class DownloadService : Service() {
                 if (preset.requiresConversion && shouldDeleteOriginal) {
                     cleanupIntermediateFiles(storagePath, safeTitle, outputFile.name)
                 }
+
+                // Notify MediaStore so the file is discoverable for play/share/delete
+                MediaScannerConnection.scanFile(
+                    this@DownloadService,
+                    arrayOf(outputFile.absolutePath),
+                    arrayOf("audio/*"),
+                    null
+                )
 
                 repository.markCompleted(
                     download.id, outputFile.absolutePath, outputFile.length()

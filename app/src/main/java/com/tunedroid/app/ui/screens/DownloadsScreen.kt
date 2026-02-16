@@ -1,11 +1,15 @@
 package com.tunedroid.app.ui.screens
 
 import android.Manifest
+import android.content.ContentResolver
+import android.content.ContentUris
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.provider.MediaStore
 import android.provider.Settings
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -176,11 +180,8 @@ fun DownloadsScreen() {
                                 // Delete from device if requested
                                 if (shouldDeleteFromDevice) {
                                     targetDownload.filePath?.let { path ->
-                                        val success = try {
-                                            File(path).delete()
-                                        } catch (e: Exception) {
-                                            android.util.Log.w("DownloadsScreen", "Failed to delete file: $path", e)
-                                            false
+                                        val success = withContext(Dispatchers.IO) {
+                                            deleteFileFromDevice(context, path)
                                         }
                                         if (!success) {
                                             snackbarHostState.showSnackbar(
@@ -325,40 +326,48 @@ fun DownloadsScreen() {
                         download = download,
                         onPlay = {
                             download.filePath?.let { path ->
-                                val file = File(path)
-                                if (file.exists()) {
+                                val uri = getShareableUri(context, path)
+                                if (uri != null) {
                                     val intent = Intent(Intent.ACTION_VIEW).apply {
-                                        setDataAndType(
-                                            androidx.core.content.FileProvider.getUriForFile(
-                                                context,
-                                                "${context.packageName}.fileprovider",
-                                                file
-                                            ),
-                                            "audio/*"
-                                        )
+                                        setDataAndType(uri, "audio/*")
                                         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                                     }
                                     try {
                                         context.startActivity(intent)
-                                    } catch (_: Exception) { }
+                                    } catch (e: Exception) {
+                                        Log.w("DownloadsScreen", "No app to play audio", e)
+                                        scope.launch {
+                                            snackbarHostState.showSnackbar("No app found to play audio")
+                                        }
+                                    }
+                                } else {
+                                    scope.launch {
+                                        snackbarHostState.showSnackbar("File not found")
+                                    }
                                 }
                             }
                         },
                         onShare = {
                             download.filePath?.let { path ->
-                                val file = File(path)
-                                if (file.exists()) {
-                                    val uri = FileProvider.getUriForFile(
-                                        context,
-                                        "${context.packageName}.fileprovider",
-                                        file
-                                    )
+                                val uri = getShareableUri(context, path)
+                                if (uri != null) {
                                     val intent = Intent(Intent.ACTION_SEND).apply {
                                         type = "audio/*"
                                         putExtra(Intent.EXTRA_STREAM, uri)
                                         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                                     }
-                                    context.startActivity(Intent.createChooser(intent, "Share audio"))
+                                    try {
+                                        context.startActivity(Intent.createChooser(intent, "Share audio"))
+                                    } catch (e: Exception) {
+                                        Log.w("DownloadsScreen", "Share failed", e)
+                                        scope.launch {
+                                            snackbarHostState.showSnackbar("Could not share file")
+                                        }
+                                    }
+                                } else {
+                                    scope.launch {
+                                        snackbarHostState.showSnackbar("File not found")
+                                    }
                                 }
                             }
                         },
@@ -516,6 +525,116 @@ private fun CompletedDownloadItem(
                 }
             }
         }
+    }
+}
+
+/**
+ * Get a content:// URI for an audio file via MediaStore.
+ * On Android 10+ (API 29+), files in shared storage must be accessed through
+ * MediaStore rather than direct File paths. This queries MediaStore by
+ * matching the file's display name and returns the content URI.
+ */
+private fun getMediaStoreUri(contentResolver: ContentResolver, filePath: String): Uri? {
+    val fileName = File(filePath).name
+    val collection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
+    } else {
+        MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+    }
+
+    val projection = arrayOf(MediaStore.Audio.Media._ID)
+    val selection = "${MediaStore.Audio.Media.DISPLAY_NAME} = ?"
+    val selectionArgs = arrayOf(fileName)
+
+    contentResolver.query(collection, projection, selection, selectionArgs, null)?.use { cursor ->
+        if (cursor.moveToFirst()) {
+            val id = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID))
+            return ContentUris.withAppendedId(collection, id)
+        }
+    }
+    return null
+}
+
+/**
+ * Get a shareable URI for a file — uses MediaStore on API 29+, FileProvider on older.
+ * If the file exists on disk but isn't in MediaStore, triggers a scan first.
+ */
+private fun getShareableUri(context: android.content.Context, filePath: String): Uri? {
+    val file = File(filePath)
+    if (!file.exists()) return null
+
+    // Try MediaStore first on API 29+
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        var uri = getMediaStoreUri(context.contentResolver, filePath)
+
+        // If not in MediaStore yet, scan it in and retry
+        if (uri == null) {
+            val latch = java.util.concurrent.CountDownLatch(1)
+            android.media.MediaScannerConnection.scanFile(
+                context,
+                arrayOf(filePath),
+                arrayOf("audio/*")
+            ) { _, scannedUri ->
+                if (scannedUri != null) uri = scannedUri
+                latch.countDown()
+            }
+            latch.await(3, java.util.concurrent.TimeUnit.SECONDS)
+            uri?.let { return it }
+            // Try one more time from MediaStore in case the callback URI was null
+            getMediaStoreUri(context.contentResolver, filePath)?.let { return it }
+        } else {
+            return uri
+        }
+    }
+
+    // Fallback to FileProvider
+    return try {
+        FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+    } catch (e: Exception) {
+        Log.w("DownloadsScreen", "FileProvider failed for: $filePath", e)
+        null
+    }
+}
+
+/**
+ * Delete a file — uses MediaStore on API 29+, direct File.delete() on older.
+ * For files not yet indexed by MediaStore, triggers a scan first then retries.
+ */
+private fun deleteFileFromDevice(context: android.content.Context, filePath: String): Boolean {
+    val file = File(filePath)
+
+    // Try MediaStore on API 29+ (scoped storage)
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        var uri = getMediaStoreUri(context.contentResolver, filePath)
+
+        // If not in MediaStore but file exists, scan it in first then retry
+        if (uri == null && file.exists()) {
+            val latch = java.util.concurrent.CountDownLatch(1)
+            android.media.MediaScannerConnection.scanFile(
+                context,
+                arrayOf(filePath),
+                arrayOf("audio/*")
+            ) { _, _ -> latch.countDown() }
+            latch.await(3, java.util.concurrent.TimeUnit.SECONDS)
+            uri = getMediaStoreUri(context.contentResolver, filePath)
+        }
+
+        if (uri != null) {
+            return try {
+                context.contentResolver.delete(uri, null, null) > 0
+            } catch (e: Exception) {
+                Log.w("DownloadsScreen", "MediaStore delete failed: $filePath", e)
+                false
+            }
+        }
+    }
+
+    // Direct delete for API 28 and below, or if MediaStore didn't find the file
+    return try {
+        file.delete()
+    } catch (e: Exception) {
+        Log.w("DownloadsScreen", "File.delete() failed: $filePath", e)
+        false
     }
 }
 
