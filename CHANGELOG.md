@@ -2,6 +2,15 @@
 
 All notable changes to TuneDroid will be documented in this file.
 
+## [1.0.12] - 2026-02-16
+
+### Fixed
+- **HomeScreen state preserved on navigation**: Accidentally tapping the bottom nav no longer loses fetched metadata and audio quality selection — state is now hoisted to the parent and survives tab switching
+
+### Changed
+- **Bottom nav "Downloads" renamed to "Library"**: Eliminates confusion between the "Download Now" action button and the bottom navigation tab; icon changed to Library Music
+- **"Download Now" blinking button**: When metadata is loaded, the download button now blinks between fire orange and neon green with bold "Download Now" text to clearly stand out from the navigation
+
 ## [1.0.11] - 2026-02-16
 
 ### Fixed

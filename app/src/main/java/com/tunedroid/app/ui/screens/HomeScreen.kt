@@ -12,7 +12,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -84,15 +86,17 @@ private fun MarqueeLoadingIndicator() {
 fun HomeScreen(
     sharedUrl: String?,
     onSharedUrlConsumed: () -> Unit,
+    urlText: String,
+    onUrlTextChange: (String) -> Unit,
+    homeState: HomeState,
+    onHomeStateChange: (HomeState) -> Unit,
+    selectedPreset: FormatPreset,
+    onSelectedPresetChange: (FormatPreset) -> Unit,
     onNavigateToDownloads: () -> Unit
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val repository = remember { DownloadRepository(context) }
-
-    var urlText by remember { mutableStateOf("") }
-    var homeState by remember { mutableStateOf<HomeState>(HomeState.Empty) }
-    var selectedPreset by remember { mutableStateOf(FormatPreset.MP3_128) }
     var showDuplicateDialog by remember { mutableStateOf(false) }
     var duplicateDownload by remember { mutableStateOf<DownloadEntity?>(null) }
     var pendingMediaInfo by remember { mutableStateOf<MediaInfo?>(null) }
@@ -102,25 +106,25 @@ fun HomeScreen(
     // Handle shared URL
     LaunchedEffect(sharedUrl) {
         if (!sharedUrl.isNullOrBlank()) {
-            urlText = sharedUrl
+            onUrlTextChange(sharedUrl)
             onSharedUrlConsumed()
             // Auto-fetch
-            homeState = HomeState.Loading
+            onHomeStateChange(HomeState.Loading)
             scope.launch {
                 val result = MetadataFetcher.fetch(sharedUrl)
-                homeState = when (result) {
+                onHomeStateChange(when (result) {
                     is MetadataResult.Success -> {
                         val stream = StreamSelector.selectBest(result.mediaInfo.audioStreams)
                         if (stream != null) {
                             val presets = FormatPreset.availablePresets(stream.bitrate)
-                            selectedPreset = presets.first()
+                            onSelectedPresetChange(presets.first())
                             HomeState.MediaLoaded(result.mediaInfo, stream, presets)
                         } else {
                             HomeState.Error("No audio streams found")
                         }
                     }
                     is MetadataResult.Error -> HomeState.Error(result.message)
-                }
+                })
             }
         }
     }
@@ -128,25 +132,25 @@ fun HomeScreen(
     fun fetchMetadata() {
         if (urlText.isBlank()) return
         if (!MediaUrlParser.isValidUrl(urlText)) {
-            homeState = HomeState.Error("Invalid URL. Please enter a valid video URL.")
+            onHomeStateChange(HomeState.Error("Invalid URL. Please enter a valid video URL."))
             return
         }
-        homeState = HomeState.Loading
+        onHomeStateChange(HomeState.Loading)
         scope.launch {
             val result = MetadataFetcher.fetch(urlText)
-            homeState = when (result) {
+            onHomeStateChange(when (result) {
                 is MetadataResult.Success -> {
                     val stream = StreamSelector.selectBest(result.mediaInfo.audioStreams)
                     if (stream != null) {
                         val presets = FormatPreset.availablePresets(stream.bitrate)
-                        selectedPreset = presets.first()
+                        onSelectedPresetChange(presets.first())
                         HomeState.MediaLoaded(result.mediaInfo, stream, presets)
                     } else {
                         HomeState.Error("No audio streams found")
                     }
                 }
                 is MetadataResult.Error -> HomeState.Error(result.message)
-            }
+            })
         }
     }
 
@@ -166,8 +170,8 @@ fun HomeScreen(
 
             performEnqueue(repository, context, mediaInfo, stream, mediaId, selectedPreset,
                 onDone = {
-                    urlText = ""
-                    homeState = HomeState.Empty
+                    onUrlTextChange("")
+                    onHomeStateChange(HomeState.Empty)
                 },
                 onNavigateToDownloads = onNavigateToDownloads
             )
@@ -199,8 +203,8 @@ fun HomeScreen(
                                 val mediaId = parseResult.mediaId ?: info.id
                                 performEnqueue(repository, context, info, state.selectedStream, mediaId, selectedPreset,
                                     onDone = {
-                                        urlText = ""
-                                        homeState = HomeState.Empty
+                                        onUrlTextChange("")
+                                        onHomeStateChange(HomeState.Empty)
                                     },
                                     onNavigateToDownloads = onNavigateToDownloads
                                 )
@@ -239,7 +243,7 @@ fun HomeScreen(
             // URL Input
             OutlinedTextField(
                 value = urlText,
-                onValueChange = { urlText = it },
+                onValueChange = onUrlTextChange,
                 modifier = Modifier.fillMaxWidth(),
                 placeholder = { Text("Paste a video URL") },
                 singleLine = true,
@@ -251,6 +255,28 @@ fun HomeScreen(
 
             // Unified Fetch / Download button — stays in same position
             val isMediaLoaded = homeState is HomeState.MediaLoaded
+
+            // Blinking animation for "Download Now" state
+            val downloadTransition = rememberInfiniteTransition(label = "download-blink")
+            val blinkProgress by downloadTransition.animateFloat(
+                initialValue = 0f,
+                targetValue = 1f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(durationMillis = 700, easing = LinearEasing),
+                    repeatMode = RepeatMode.Reverse
+                ),
+                label = "blink-progress"
+            )
+
+            val fireOrange = Color(0xFFFF6D00)
+            val neonGreen = Color(0xFF00E676)
+            val blinkContainerColor = if (isMediaLoaded) {
+                lerp(fireOrange, neonGreen, blinkProgress)
+            } else null
+            val blinkContentColor = if (isMediaLoaded) {
+                lerp(Color.White, Color.Black, blinkProgress)
+            } else null
+
             Button(
                 onClick = {
                     if (isMediaLoaded) {
@@ -264,9 +290,20 @@ fun HomeScreen(
                     .fillMaxWidth()
                     .padding(horizontal = 32.dp),
                 enabled = if (isMediaLoaded) true
-                    else urlText.isNotBlank() && homeState !is HomeState.Loading
+                    else urlText.isNotBlank() && homeState !is HomeState.Loading,
+                colors = if (isMediaLoaded && blinkContainerColor != null && blinkContentColor != null) {
+                    ButtonDefaults.buttonColors(
+                        containerColor = blinkContainerColor,
+                        contentColor = blinkContentColor
+                    )
+                } else {
+                    ButtonDefaults.buttonColors()
+                }
             ) {
-                Text(if (isMediaLoaded) "Download" else "Fetch")
+                Text(
+                    text = if (isMediaLoaded) "Download Now" else "Fetch",
+                    fontWeight = if (isMediaLoaded) FontWeight.Bold else FontWeight.Normal
+                )
             }
 
             when (val state = homeState) {
@@ -415,7 +452,7 @@ fun HomeScreen(
                             ) {
                                 RadioButton(
                                     selected = isSelected,
-                                    onClick = { if (eligible) selectedPreset = preset },
+                                    onClick = { if (eligible) onSelectedPresetChange(preset) },
                                     enabled = eligible
                                 )
                                 Text(
@@ -460,7 +497,7 @@ fun HomeScreen(
 
                     Button(
                         onClick = {
-                            homeState = HomeState.Empty
+                            onHomeStateChange(HomeState.Empty)
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {

@@ -8,7 +8,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -22,6 +22,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.tunedroid.app.data.repository.DownloadRepository
+import com.tunedroid.app.engine.FormatPreset
 import com.tunedroid.app.ui.screens.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -32,7 +33,7 @@ import java.io.File
 sealed class Screen(val route: String, val label: String) {
     data object FirstLaunch : Screen("first_launch", "Welcome")
     data object Home : Screen("home", "Home")
-    data object Downloads : Screen("downloads", "Downloads")
+    data object Downloads : Screen("downloads", "Library")
     data object Settings : Screen("settings", "Settings")
 }
 
@@ -63,6 +64,11 @@ fun TuneDroidNavHost(
     val startDestination = if (hasSeenWelcome) Screen.Home.route else Screen.FirstLaunch.route
 
     val repository = remember { DownloadRepository(context) }
+
+    // Hoisted HomeScreen state — survives navigation between tabs
+    var homeUrlText by remember { mutableStateOf("") }
+    var homeState by remember { mutableStateOf<HomeState>(HomeState.Empty) }
+    var homeSelectedPreset by remember { mutableStateOf(FormatPreset.MP3_128) }
 
     // Permission launcher for file recovery after reinstall
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -132,7 +138,7 @@ fun TuneDroidNavHost(
                     bottomNavItems.forEach { screen ->
                         val icon = when (screen) {
                             Screen.Home -> Icons.Default.Home
-                            Screen.Downloads -> Icons.Default.Download
+                            Screen.Downloads -> Icons.Default.LibraryMusic
                             else -> Icons.Default.Home
                         }
                         NavigationBarItem(
@@ -173,6 +179,12 @@ fun TuneDroidNavHost(
                 HomeScreen(
                     sharedUrl = sharedUrl,
                     onSharedUrlConsumed = onSharedUrlConsumed,
+                    urlText = homeUrlText,
+                    onUrlTextChange = { homeUrlText = it },
+                    homeState = homeState,
+                    onHomeStateChange = { homeState = it },
+                    selectedPreset = homeSelectedPreset,
+                    onSelectedPresetChange = { homeSelectedPreset = it },
                     onNavigateToDownloads = {
                         navController.navigate(Screen.Downloads.route) {
                             popUpTo(navController.graph.findStartDestination().id) {
