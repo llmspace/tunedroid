@@ -143,10 +143,12 @@ object AppUpdateChecker {
                 connection.requestMethod = "GET"
                 connection.connectTimeout = 15000
                 connection.readTimeout = 30000
+                connection.instanceFollowRedirects = true
                 connection.connect()
 
-                if (connection.responseCode != 200) {
-                    throw Exception("HTTP ${connection.responseCode}")
+                val responseCode = connection.responseCode
+                if (responseCode != 200) {
+                    throw Exception("HTTP $responseCode")
                 }
 
                 val totalBytes = connection.contentLength.toLong()
@@ -166,19 +168,28 @@ object AppUpdateChecker {
                                 }
                             }
                         }
+                        output.flush()
+                        output.fd.sync()
                     }
                 }
                 connection.disconnect()
+
+                // Verify the file was fully written
+                if (totalBytes > 0 && file.length() != totalBytes) {
+                    throw Exception("Incomplete download: ${file.length()}/$totalBytes bytes")
+                }
+
                 file
             }
 
+            // Switch to Main thread for install — MIUI blocks startActivity from background
             withContext(Dispatchers.Main) {
                 onStateChange(UpdateDownloadState.Installing)
-            }
 
-            installApk(context, apkFile)
+                // Small delay to ensure UI updates before launching installer
+                kotlinx.coroutines.delay(200)
 
-            withContext(Dispatchers.Main) {
+                installApk(context, apkFile)
                 onStateChange(UpdateDownloadState.Done)
             }
 
@@ -191,24 +202,30 @@ object AppUpdateChecker {
     }
 
     private fun installApk(context: Context, apkFile: File) {
-        try {
-            val uri = FileProvider.getUriForFile(
-                context,
-                "${context.packageName}.fileprovider",
-                apkFile
-            )
+        val uri = FileProvider.getUriForFile(
+            context,
+            "${context.packageName}.fileprovider",
+            apkFile
+        )
 
-            val intent = Intent(Intent.ACTION_VIEW).apply {
-                setDataAndType(uri, "application/vnd.android.package-archive")
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-
-            context.startActivity(intent)
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to launch APK installer", e)
-            throw e
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(uri, "application/vnd.android.package-archive")
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
+
+        // Grant URI permission explicitly to all potential handlers (MIUI workaround)
+        val resolvedActivities = context.packageManager.queryIntentActivities(intent, 0)
+        for (resolvedInfo in resolvedActivities) {
+            context.grantUriPermission(
+                resolvedInfo.activityInfo.packageName,
+                uri,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION
+            )
+        }
+
+        Log.d(TAG, "Launching APK installer for: ${apkFile.absolutePath} (${apkFile.length()} bytes)")
+        context.startActivity(intent)
     }
 
     private fun compareVersions(v1: String, v2: String): Int {

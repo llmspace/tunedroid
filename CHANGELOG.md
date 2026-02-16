@@ -2,6 +2,13 @@
 
 All notable changes to TuneDroid will be documented in this file.
 
+## [1.0.13] - 2026-02-16
+
+### Fixed
+- **APK installer now launches reliably on MIUI**: Install intent is fired on the main thread with explicit URI permission grants to all resolved handlers — fixes intermittent silent failure where the installer wouldn't open after downloading an update
+- APK download integrity verified before install attempt (file size check)
+- File fully flushed and synced to disk before triggering installer
+
 ## [1.0.12] - 2026-02-16
 
 ### Fixed
