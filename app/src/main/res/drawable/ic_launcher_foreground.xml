@@ -4,8 +4,79 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Music note icon for TuneDroid -->
+
+    <!-- Cosmic rabbit with headphones - simplified icon version -->
+
+    <!-- Rabbit head (cyan/blue gradient) -->
     <path
-        android:fillColor="#FF6D00"
-        android:pathData="M54,18 L54,66 C51.8,64.7 49.2,64 46.5,64 C40.2,64 35,68.5 35,74 C35,79.5 40.2,84 46.5,84 C52.8,84 58,79.5 58,74 L58,36 L72,30 L72,24 Z" />
+        android:fillColor="#00D4FF"
+        android:pathData="M54,30 C44,30 36,38 36,48 L36,62 C36,72 44,80 54,80 C64,80 72,72 72,62 L72,48 C72,38 64,30 54,30 Z" />
+
+    <!-- Left ear -->
+    <path
+        android:fillColor="#FF2E97"
+        android:pathData="M42,20 L40,40 L48,38 Z" />
+
+    <!-- Right ear -->
+    <path
+        android:fillColor="#FF2E97"
+        android:pathData="M66,20 L68,40 L60,38 Z" />
+
+    <!-- Left ear outline (cyan) -->
+    <path
+        android:fillColor="#00D4FF"
+        android:pathData="M40,18 L38,40 L42,39 L44,20 Z" />
+
+    <!-- Right ear outline (cyan) -->
+    <path
+        android:fillColor="#00D4FF"
+        android:pathData="M68,18 L70,40 L66,39 L64,20 Z" />
+
+    <!-- Left eye (purple/pink gradient) -->
+    <path
+        android:fillColor="#CC00FF"
+        android:pathData="M46,52 C46,54.76 43.76,57 41,57 C38.24,57 36,54.76 36,52 C36,49.24 38.24,47 41,47 C43.76,47 46,49.24 46,52 Z" />
+
+    <!-- Right eye (purple/pink gradient) -->
+    <path
+        android:fillColor="#CC00FF"
+        android:pathData="M72,52 C72,54.76 69.76,57 67,57 C64.24,57 62,54.76 62,52 C62,49.24 64.24,47 67,47 C69.76,47 72,49.24 72,52 Z" />
+
+    <!-- Left eye highlight -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M43,50 C43,51.1 42.1,52 41,52 C39.9,52 39,51.1 39,50 C39,48.9 39.9,48 41,48 C42.1,48 43,48.9 43,50 Z" />
+
+    <!-- Right eye highlight -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M69,50 C69,51.1 68.1,52 67,52 C65.9,52 65,51.1 65,50 C65,48.9 65.9,48 67,48 C68.1,48 69,48.9 69,50 Z" />
+
+    <!-- Nose (pink) -->
+    <path
+        android:fillColor="#FF2E97"
+        android:pathData="M54,64 L52,66 L54,67 L56,66 Z" />
+
+    <!-- Left headphone (dark with cyan accent) -->
+    <path
+        android:fillColor="#1A1A2E"
+        android:pathData="M28,48 C28,48 26,50 26,54 C26,58 28,60 28,60 L32,60 L32,48 Z" />
+    <path
+        android:fillColor="#00D4FF"
+        android:pathData="M30,52 C30,53.1 29.1,54 28,54 C28,54 28,52 30,52 Z" />
+
+    <!-- Right headphone (dark with cyan accent) -->
+    <path
+        android:fillColor="#1A1A2E"
+        android:pathData="M80,48 C80,48 82,50 82,54 C82,58 80,60 80,60 L76,60 L76,48 Z" />
+    <path
+        android:fillColor="#00D4FF"
+        android:pathData="M78,52 C78,53.1 78.9,54 80,54 C80,54 80,52 78,52 Z" />
+
+    <!-- Headphone band (dark) -->
+    <path
+        android:fillColor="#1A1A2E"
+        android:strokeWidth="3"
+        android:strokeColor="#00D4FF"
+        android:pathData="M32,40 Q54,32 76,40" />
 </vector>

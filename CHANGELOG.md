@@ -2,6 +2,13 @@
 
 All notable changes to TuneDroid will be documented in this file.
 
+## [1.0.17] - 2026-02-16
+
+### Changed
+- **New app icon featuring the cosmic rabbit**: Replaced the generic music note icon with TuneDroid's signature cosmic rabbit with headphones character
+- Icon now matches the in-app branding for a cohesive visual identity
+- Features vibrant cyan, pink, and purple colors against a cosmic gradient background
+
 ## [1.0.16] - 2026-02-16
 
 ### Fixed
