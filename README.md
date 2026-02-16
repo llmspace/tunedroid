@@ -26,6 +26,10 @@ Android "audio-from-video-url" extraction app.
 (junkfood02 fork) + FFmpeg
 - Room, WorkManager, Coil, DataStore
 
+## Download
+
+Don't want to build it yourself? Grab the latest APK from [tunedroid-releases](https://github.com/llmspace/tunedroid-releases/releases).
+
 ## Build Instructions
 
 ### Prerequisites
