@@ -233,7 +233,6 @@ fun HomeScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
                 .padding(horizontal = 16.dp)
-                .verticalScroll(rememberScrollState())
         ) {
             Spacer(modifier = Modifier.height(8.dp))
 
@@ -263,59 +262,53 @@ fun HomeScreen(
 
             when (val state = homeState) {
                 HomeState.Empty -> {
+                    // Branding image fills remaining space, tip at bottom
                     Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalAlignment = Alignment.CenterHorizontally
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Spacer(modifier = Modifier.height(24.dp))
-
-                        // Cosmic rabbit with headphones image
+                        // Branding image — as large as possible
                         Image(
-                            painter = painterResource(id = R.drawable.app_branding),
-                            contentDescription = "TuneDroid - Music Rabbit",
+                            painter = painterResource(id = R.drawable.tunedroid_branded),
+                            contentDescription = "TuneDroid",
                             modifier = Modifier
-                                .size(200.dp)
+                                .fillMaxWidth()
+                                .weight(1f)
+                                .padding(horizontal = 8.dp, vertical = 8.dp)
                                 .clip(RoundedCornerShape(16.dp)),
-                            contentScale = ContentScale.Crop
+                            contentScale = ContentScale.Fit
                         )
 
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        // App name text below image
-                        Text(
-                            text = "TuneDroid",
-                            style = MaterialTheme.typography.headlineMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        // Tip text
+                        // Tip text — anchored to the bottom
                         Text(
                             text = "Tip: Share a video directly to TuneDroid from your browser or other apps",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(horizontal = 32.dp)
+                            modifier = Modifier.padding(horizontal = 32.dp, vertical = 8.dp)
                         )
                     }
                 }
 
                 HomeState.Loading -> {
                     Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalAlignment = Alignment.CenterHorizontally
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
                     ) {
-                        Spacer(modifier = Modifier.height(24.dp))
-
-                        // Show bunny during loading
+                        // Show branding during loading
                         Image(
-                            painter = painterResource(id = R.drawable.app_branding),
-                            contentDescription = "TuneDroid - Music Rabbit",
+                            painter = painterResource(id = R.drawable.tunedroid_branded),
+                            contentDescription = "TuneDroid",
                             modifier = Modifier
-                                .size(200.dp)
+                                .fillMaxWidth()
+                                .padding(horizontal = 32.dp)
                                 .clip(RoundedCornerShape(16.dp)),
-                            contentScale = ContentScale.Crop
+                            contentScale = ContentScale.FillWidth
                         )
 
                         Spacer(modifier = Modifier.height(24.dp))
@@ -325,118 +318,132 @@ fun HomeScreen(
                 }
 
                 is HomeState.MediaLoaded -> {
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    // Media info card
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                            .verticalScroll(rememberScrollState())
                     ) {
-                        Row(
-                            modifier = Modifier.padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            // Thumbnail
-                            if (state.mediaInfo.thumbnailUrl != null) {
-                                AsyncImage(
-                                    model = state.mediaInfo.thumbnailUrl,
-                                    contentDescription = "Thumbnail",
-                                    modifier = Modifier
-                                        .size(120.dp, 68.dp)
-                                        .clip(RoundedCornerShape(8.dp)),
-                                    contentScale = ContentScale.Crop
-                                )
-                                Spacer(modifier = Modifier.width(12.dp))
-                            }
+                        Spacer(modifier = Modifier.height(8.dp))
 
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = state.mediaInfo.title,
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.SemiBold,
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                if (state.mediaInfo.author.isNotBlank()) {
+                        // Media info card
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                // Thumbnail
+                                if (state.mediaInfo.thumbnailUrl != null) {
+                                    AsyncImage(
+                                        model = state.mediaInfo.thumbnailUrl,
+                                        contentDescription = "Thumbnail",
+                                        modifier = Modifier
+                                            .size(120.dp, 68.dp)
+                                            .clip(RoundedCornerShape(8.dp)),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                }
+
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = state.mediaInfo.title,
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.SemiBold,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    if (state.mediaInfo.author.isNotBlank()) {
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(
+                                            text = state.mediaInfo.author,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
                                     Spacer(modifier = Modifier.height(4.dp))
                                     Text(
-                                        text = state.mediaInfo.author,
+                                        text = formatDuration(state.mediaInfo.duration),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    text = formatDuration(state.mediaInfo.duration),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
                             }
                         }
-                    }
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(16.dp))
 
-                    // Format preset picker
-                    Text(
-                        text = "Audio Quality",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    state.availablePresets.forEach { preset ->
-                        val isSelected = selectedPreset == preset
-
-                        // Dynamic label for ORIGINAL preset
-                        val displayLabel = if (preset == FormatPreset.ORIGINAL) {
-                            val ext = state.selectedStream.extension.uppercase()
-                            val bitrate = state.selectedStream.bitrate
-                            "Original — $ext $bitrate kbps"
-                        } else {
-                            preset.label
-                        }
-
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            RadioButton(
-                                selected = isSelected,
-                                onClick = { selectedPreset = preset }
-                            )
-                            Text(
-                                text = displayLabel,
-                                style = MaterialTheme.typography.bodyLarge,
-                                modifier = Modifier
-                                    .padding(start = 8.dp)
-                                    .weight(1f),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(24.dp))
-
-                    // Download button
-                    Button(
-                        onClick = {
-                            startDownload(state.mediaInfo, state.selectedStream)
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(56.dp),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
+                        // Format preset picker — show all presets, grey out ineligible
                         Text(
-                            text = "Download",
+                            text = "Audio Quality",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold
                         )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        FormatPreset.entries.forEach { preset ->
+                            val eligible = FormatPreset.isEligible(preset, state.selectedStream.bitrate)
+                            val isSelected = selectedPreset == preset
+
+                            // Dynamic label for ORIGINAL preset
+                            val displayLabel = if (preset == FormatPreset.ORIGINAL) {
+                                val ext = state.selectedStream.extension.uppercase()
+                                val bitrate = state.selectedStream.bitrate
+                                "Original — $ext $bitrate kbps"
+                            } else {
+                                preset.label
+                            }
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = isSelected,
+                                    onClick = { if (eligible) selectedPreset = preset },
+                                    enabled = eligible
+                                )
+                                Text(
+                                    text = displayLabel,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = if (eligible) {
+                                        MaterialTheme.colorScheme.onSurface
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                                    },
+                                    modifier = Modifier
+                                        .padding(start = 8.dp)
+                                        .weight(1f),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(24.dp))
+
+                        // Download button
+                        Button(
+                            onClick = {
+                                startDownload(state.mediaInfo, state.selectedStream)
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(56.dp),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text(
+                                text = "Download",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
                     }
                 }
 

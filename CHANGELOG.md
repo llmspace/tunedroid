@@ -2,6 +2,22 @@
 
 All notable changes to TuneDroid will be documented in this file.
 
+## [1.0.6] - 2026-02-16
+
+### Changed
+- **HomeScreen format picker**: All MP3 quality options now visible after fetching metadata — ineligible bitrates are greyed out based on source quality
+- **New branding image**: Replaced home screen artwork with TuneDroid branded logo
+- **Layout**: Branding image fills available space, tip text anchored to bottom
+- Removed "TuneDroid" heading text from home screen
+
+### Removed
+- **Default format setting**: Removed from Settings screen — format is now chosen per-download on the Home screen
+
+### Technical
+- FormatPreset.isEligible() helper for bitrate-aware format availability
+- HomeScreen shows all FormatPreset.entries with disabled state for ineligible options
+- HomeScreen layout restructured: scrollable only in MediaLoaded state, weight-based in Empty/Loading
+
 ## [1.0.5] - 2026-02-16
 
 ### Fixed

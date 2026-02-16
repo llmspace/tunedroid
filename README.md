@@ -1,5 +1,9 @@
 # TuneDroid
 
+<p align="center">
+  <img src="tunedroid-branded.png" alt="TuneDroid" width="400">
+</p>
+
 Android "audio-from-video-url" extraction app.
 
 ## Features

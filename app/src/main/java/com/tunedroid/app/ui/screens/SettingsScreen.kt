@@ -19,7 +19,6 @@ import com.tunedroid.app.BuildConfig
 import com.tunedroid.app.data.PreferencesManager
 import com.tunedroid.app.data.repository.DownloadRepository
 import com.tunedroid.app.engine.EngineUpdater
-import com.tunedroid.app.engine.FormatPreset
 import com.tunedroid.app.updater.AppUpdateChecker
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -34,7 +33,6 @@ fun SettingsScreen(onNavigateBack: () -> Unit) {
     val repository = remember { DownloadRepository(context) }
 
     val storagePath by prefsManager.storagePath.collectAsState(initial = "")
-    val defaultFormat by prefsManager.defaultFormat.collectAsState(initial = "MP3_128")
     val autoCheckUpdates by prefsManager.autoCheckUpdates.collectAsState(initial = true)
     val autoUpdateEngine by prefsManager.autoUpdateEngine.collectAsState(initial = false)
     val deleteOriginal by prefsManager.deleteOriginal.collectAsState(initial = true)
@@ -42,56 +40,12 @@ fun SettingsScreen(onNavigateBack: () -> Unit) {
 
     var engineVersion by remember { mutableStateOf("Loading...") }
     var isCheckingUpdate by remember { mutableStateOf(false) }
-    var showFormatPicker by remember { mutableStateOf(false) }
     var showCleanupDialog by remember { mutableStateOf(false) }
     var cleanupDialogMessage by remember { mutableStateOf("") }
     var isScanning by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         engineVersion = EngineUpdater.getEngineVersion()
-    }
-
-    // Format picker dialog
-    if (showFormatPicker) {
-        AlertDialog(
-            onDismissRequest = { showFormatPicker = false },
-            title = { Text("Default Format") },
-            text = {
-                Column {
-                    FormatPreset.entries.forEach { preset ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    scope.launch {
-                                        prefsManager.setDefaultFormat(preset.name)
-                                    }
-                                    showFormatPicker = false
-                                }
-                                .padding(vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            RadioButton(
-                                selected = defaultFormat == preset.name,
-                                onClick = {
-                                    scope.launch {
-                                        prefsManager.setDefaultFormat(preset.name)
-                                    }
-                                    showFormatPicker = false
-                                }
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(preset.label)
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showFormatPicker = false }) {
-                    Text("Cancel")
-                }
-            }
-        )
     }
 
     // Cleanup dialog
@@ -204,20 +158,6 @@ fun SettingsScreen(onNavigateBack: () -> Unit) {
             SettingsInfoItem(
                 title = "Storage location",
                 subtitle = storagePath.ifBlank { "Default" }
-            )
-
-            HorizontalDivider()
-
-            // Default format
-            SettingsItem(
-                title = "Default format",
-                subtitle = try {
-                    FormatPreset.valueOf(defaultFormat).label
-                } catch (_: Exception) {
-                    "MP3 — Standard (128 kbps)"
-                },
-                onClick = { showFormatPicker = true },
-                showChevron = true
             )
 
             HorizontalDivider()

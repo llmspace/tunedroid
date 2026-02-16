@@ -20,5 +20,14 @@ enum class FormatPreset(
             // Always include ORIGINAL as fallback
             return if (eligible.isEmpty()) listOf(ORIGINAL) else eligible
         }
+
+        /**
+         * Returns true if [preset] can be used with the given source bitrate.
+         * ORIGINAL is always eligible; MP3 presets are eligible only when their
+         * target bitrate does not exceed the source.
+         */
+        fun isEligible(preset: FormatPreset, sourceBitrateKbps: Int): Boolean {
+            return preset == ORIGINAL || (preset.requiresConversion && preset.bitrate <= sourceBitrateKbps)
+        }
     }
 }
