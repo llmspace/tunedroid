@@ -6,6 +6,10 @@
 
 Android "audio-from-video-url" extraction app.
 
+## Download
+
+Don't want to build it yourself? Grab the latest APK from [tunedroid-releases](https://github.com/llmspace/tunedroid-releases/releases).
+
 ## Features
 - Extract audio from video URLs
 - Multiple format presets (MP3 128/256/320 kbps, or original format)
@@ -25,10 +29,6 @@ Android "audio-from-video-url" extraction app.
 ## Key Dependencies
 (junkfood02 fork) + FFmpeg
 - Room, WorkManager, Coil, DataStore
-
-## Download
-
-Don't want to build it yourself? Grab the latest APK from [tunedroid-releases](https://github.com/llmspace/tunedroid-releases/releases).
 
 ## Build Instructions
 
